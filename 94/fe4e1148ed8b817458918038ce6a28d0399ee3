@@ -1,0 +1,21 @@
+run_all.sh
+  s_c5a046dc9952fb::t_47a9b9d1c44568 1-69
+README.md
+  s_c5a046dc9952fb::t_a088cab9a06d62 26-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "94fe4e1148ed8b817458918038ce6a28d0399ee3",
+  "prompts": {},
+  "sessions": {
+    "s_c5a046dc9952fb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9525527d-e64f-4eae-8bd1-6f765120e08d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "harshit <siy247587@iitd.ac.in>"
+    }
+  }
+}
