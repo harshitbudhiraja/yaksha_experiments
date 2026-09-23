@@ -1,0 +1,144 @@
+{
+  "n_dialogues": 70,
+  "mode": "static",
+  "IA": 0.7004132231404959,
+  "IA_first_attempt": 0.7004132231404959,
+  "CA": 0.7324478551751279,
+  "IFR": 0.034538567493112945,
+  "CIF": 4.871428571428571,
+  "CIF_excl_base": 4.171428571428572,
+  "CIF_issued": 4.871428571428571,
+  "mean_instructions_issued": 6.914285714285715,
+  "final_CA": 0.70578231292517,
+  "base_retained_rate": 0.7,
+  "mean_turns": 6.914285714285715,
+  "unprompted_pass_rate": 0.606280193236715,
+  "by_instruction_type": {
+    "Annotation Coverage": {
+      "n": 70,
+      "IA_first_attempt": 0.5571428571428572,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Base": {
+      "n": 70,
+      "IA_first_attempt": 0.5714285714285714,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.030927835051546393
+    },
+    "Code Complexity": {
+      "n": 70,
+      "IA_first_attempt": 0.9285714285714286,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Code Standard": {
+      "n": 70,
+      "IA_first_attempt": 0.38571428571428573,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Edge Case Handling": {
+      "n": 65,
+      "IA_first_attempt": 0.7692307692307693,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.026143790849673203
+    },
+    "Exception Handling": {
+      "n": 69,
+      "IA_first_attempt": 0.8840579710144928,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.07407407407407407
+    },
+    "Input-Output Conditions": {
+      "n": 70,
+      "IA_first_attempt": 0.8142857142857143,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.03546099290780142
+    }
+  },
+  "by_turn": {
+    "1": {
+      "n": 70,
+      "IA": 0.5714285714285714,
+      "CA": 0.5714285714285714,
+      "IFR": 0.0,
+      "upstream_ife": 0.5714285714285714
+    },
+    "2": {
+      "n": 70,
+      "IA": 0.8142857142857143,
+      "CA": 0.7714285714285715,
+      "IFR": 0.0,
+      "upstream_ife": 0.38571428571428573
+    },
+    "3": {
+      "n": 70,
+      "IA": 0.8857142857142857,
+      "CA": 0.8047619047619048,
+      "IFR": 0.007142857142857143,
+      "upstream_ife": 0.26825396825396824
+    },
+    "4": {
+      "n": 70,
+      "IA": 0.7857142857142857,
+      "CA": 0.7857142857142857,
+      "IFR": 0.04285714285714286,
+      "upstream_ife": 0.19642857142857142
+    },
+    "5": {
+      "n": 70,
+      "IA": 0.5571428571428572,
+      "CA": 0.7371428571428572,
+      "IFR": 0.04880952380952381,
+      "upstream_ife": 0.14742857142857144
+    },
+    "6": {
+      "n": 69,
+      "IA": 0.8985507246376812,
+      "CA": 0.7536231884057971,
+      "IFR": 0.07632850241545894,
+      "upstream_ife": 0.12560386473429952
+    },
+    "7": {
+      "n": 65,
+      "IA": 0.36923076923076925,
+      "CA": 0.701098901098901,
+      "IFR": 0.06974358974358974,
+      "upstream_ife": 0.10015698587127159
+    }
+  },
+  "forgetting_by_age": {
+    "1": {
+      "n": 328,
+      "forget_rate": 0.009146341463414634
+    },
+    "2": {
+      "n": 259,
+      "forget_rate": 0.02702702702702703
+    },
+    "3": {
+      "n": 219,
+      "forget_rate": 0.0639269406392694
+    },
+    "4": {
+      "n": 166,
+      "forget_rate": 0.06626506024096386
+    },
+    "5": {
+      "n": 103,
+      "forget_rate": 0.04854368932038835
+    },
+    "6": {
+      "n": 37,
+      "forget_rate": 0.02702702702702703
+    }
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "n_dialogues": 70,
+  "mode": "dynamic",
+  "IA": 0.6006825938566553,
+  "IA_first_attempt": 0.6742081447963801,
+  "CA": 0.6770762229806598,
+  "IFR": 0.028668941979522182,
+  "CIF": 6.214285714285714,
+  "CIF_excl_base": 5.414285714285715,
+  "CIF_issued": 2.4571428571428573,
+  "mean_instructions_issued": 3.157142857142857,
+  "final_CA": 0.8026190476190476,
+  "base_retained_rate": 0.8,
+  "mean_turns": 4.185714285714286,
+  "unprompted_pass_rate": 0.6207729468599034,
+  "by_instruction_type": {
+    "Annotation Coverage": {
+      "n": 51,
+      "IA_first_attempt": 0.8431372549019608,
+      "IA_after_feedback": 0.75,
+      "n_retries": 8,
+      "forget_rate_once_satisfied": 0.07462686567164178
+    },
+    "Base": {
+      "n": 70,
+      "IA_first_attempt": 0.6142857142857143,
+      "IA_after_feedback": 0.4444444444444444,
+      "n_retries": 27,
+      "forget_rate_once_satisfied": 0.08441558441558442
+    },
+    "Code Complexity": {
+      "n": 2,
+      "IA_first_attempt": 0.0,
+      "IA_after_feedback": 0.0,
+      "n_retries": 2,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Code Standard": {
+      "n": 43,
+      "IA_first_attempt": 0.6046511627906976,
+      "IA_after_feedback": 0.058823529411764705,
+      "n_retries": 17,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Edge Case Handling": {
+      "n": 16,
+      "IA_first_attempt": 0.5625,
+      "IA_after_feedback": 0.5714285714285714,
+      "n_retries": 7,
+      "forget_rate_once_satisfied": 0.14705882352941177
+    },
+    "Exception Handling": {
+      "n": 27,
+      "IA_first_attempt": 0.9629629629629629,
+      "IA_after_feedback": 0.0,
+      "n_retries": 1,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Input-Output Conditions": {
+      "n": 12,
+      "IA_first_attempt": 0.16666666666666666,
+      "IA_after_feedback": 0.4,
+      "n_retries": 10,
+      "forget_rate_once_satisfied": 0.0
+    }
+  },
+  "by_turn": {
+    "1": {
+      "n": 70,
+      "IA": 0.6142857142857143,
+      "CA": 0.6142857142857143,
+      "IFR": 0.0,
+      "upstream_ife": 0.6142857142857143
+    },
+    "2": {
+      "n": 55,
+      "IA": 0.6545454545454545,
+      "CA": 0.6909090909090909,
+      "IFR": 0.0,
+      "upstream_ife": 0.34545454545454546
+    },
+    "3": {
+      "n": 50,
+      "IA": 0.68,
+      "CA": 0.7266666666666667,
+      "IFR": 0.02,
+      "upstream_ife": 0.2422222222222222
+    },
+    "4": {
+      "n": 42,
+      "IA": 0.6428571428571429,
+      "CA": 0.7103174603174603,
+      "IFR": 0.03571428571428571,
+      "upstream_ife": 0.1775793650793651
+    },
+    "5": {
+      "n": 32,
+      "IA": 0.5625,
+      "CA": 0.6875,
+      "IFR": 0.046875,
+      "upstream_ife": 0.1375
+    },
+    "6": {
+      "n": 21,
+      "IA": 0.5238095238095238,
+      "CA": 0.6642857142857143,
+      "IFR": 0.07936507936507936,
+      "upstream_ife": 0.11071428571428571
+    },
+    "7": {
+      "n": 13,
+      "IA": 0.3076923076923077,
+      "CA": 0.6576923076923077,
+      "IFR": 0.11538461538461538,
+      "upstream_ife": 0.09395604395604396
+    },
+    "8": {
+      "n": 7,
+      "IA": 0.2857142857142857,
+      "CA": 0.6738095238095239,
+      "IFR": 0.14047619047619048,
+      "upstream_ife": 0.08422619047619048
+    },
+    "9": {
+      "n": 2,
+      "IA": 0.0,
+      "CA": 0.5833333333333333,
+      "IFR": 0.125,
+      "upstream_ife": 0.06481481481481481
+    },
+    "10": {
+      "n": 1,
+      "IA": 1.0,
+      "CA": 0.8333333333333334,
+      "IFR": 0.0,
+      "upstream_ife": 0.08333333333333334
+    }
+  },
+  "forgetting_by_age": {
+    "1": {
+      "n": 129,
+      "forget_rate": 0.023255813953488372
+    },
+    "2": {
+      "n": 96,
+      "forget_rate": 0.0625
+    },
+    "3": {
+      "n": 55,
+      "forget_rate": 0.09090909090909091
+    },
+    "4": {
+      "n": 37,
+      "forget_rate": 0.10810810810810811
+    },
+    "5": {
+      "n": 23,
+      "forget_rate": 0.08695652173913043
+    },
+    "6": {
+      "n": 9,
+      "forget_rate": 0.1111111111111111
+    },
+    "7": {
+      "n": 4,
+      "forget_rate": 0.25
+    },
+    "8": {
+      "n": 2,
+      "forget_rate": 0.5
+    }
+  }
+}

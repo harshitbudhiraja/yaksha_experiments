@@ -1,0 +1,11 @@
+# Fetched by ./fetch_data.sh -- not vendored.
+CodeIF-Bench/
+
+# Ad-hoc run outputs at the experiment root (scratch). Anything under
+# results/ is a real run and IS tracked.
+/*.jsonl
+/*.json
+
+# Server and scheduler logs from run_one_model.pbs -- large and machine-specific.
+results/*/vllm.log
+results/*/job.log

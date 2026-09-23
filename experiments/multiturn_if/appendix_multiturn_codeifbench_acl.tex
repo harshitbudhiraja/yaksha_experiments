@@ -1,0 +1,143 @@
+% ---------------------------------------------------------------------------
+% Appendix: Multi-turn instruction following on CodeIF-Bench (ACL format)
+%
+% Usage: in the main ACL paper, after \appendix
+%     \input{appendix_multiturn_codeifbench_acl}
+%
+% Preamble (acl.sty already loads natbib, so \citet/\citep work):
+%   \usepackage[final]{acl}      % or [review]
+%   \usepackage{booktabs}
+%   \usepackage{multirow}
+%
+% BibTeX:
+% @misc{wang2025codeif,
+%   title         = {CodeIF-Bench: Evaluating Instruction-Following Capabilities
+%                    of Large Language Models in Interactive Code Generation},
+%   author        = {Peiding Wang and Li Zhang and Fang Liu and Lin Shi and
+%                    Minxiao Li and Bo Shen and An Fu},
+%   year          = {2025},
+%   eprint        = {2503.22688},
+%   archivePrefix = {arXiv},
+%   primaryClass  = {cs.SE},
+%   url           = {https://arxiv.org/abs/2503.22688}
+% }
+%
+% All numbers come from results/<model>/summary_{static,dynamic}_valid50.json.
+% ---------------------------------------------------------------------------
+
+\section{Multi-Turn Instruction Following}
+\label{app:multiturn-if}
+
+We measure whether models keep satisfying instructions as a coding
+conversation adds them one turn at a time, using
+CodeIF-Bench~\citep{wang2025codeif}. Every instruction in the benchmark comes
+with executable unit tests, so compliance is decided by running code, not by
+an LLM judge.
+
+\subsection{Experimental Setup}
+\label{app:multiturn-if-setup}
+
+\paragraph{Data.}
+We use the function-level split, which is derived from MBPP. Each task has a
+short specification with base assertions, plus six requirement types, each
+with its own unit tests: \emph{Input--Output Conditions}, \emph{Exception
+Handling}, \emph{Edge Case Handling}, \emph{Annotation Coverage}, \emph{Code
+Complexity}, and \emph{Code Standard} (PEP~8). We exclude \emph{Functionality
+Extension} because it changes the function signature, which invalidates the
+base assertions. The released file \texttt{L\_1\_part\_2.jsonl} (20 tasks)
+uses the repository-level schema: its tests are \texttt{pytest} node
+identifiers, which pass vacuously when executed as Python. We therefore
+evaluate on the remaining \textbf{50 function-level tasks}.
+
+\paragraph{Protocols.}
+\emph{Static}: requirements are issued one per turn in the benchmark's fixed
+order, with no feedback and no retries. This isolates retention from repair.
+\emph{Dynamic}: each round issues the first requirement that the current code
+fails. If the model fails it, one feedback turn quotes the failing check; if
+it fails again, the requirement is dropped. After every assistant turn, we run the unit
+tests for \emph{all} of the task's requirements against the current code.
+
+\paragraph{Metrics.}
+Let $S_t$ be the instructions issued up to turn $t$ (the base specification
+counts as one), and let $P_t$ be the earlier instructions the model had already
+satisfied. \textbf{IA} is 1 if the instruction issued at turn $t$ passes all its
+tests. \textbf{CA} is the fraction of $S_t$ that passes at turn $t$.
+\textbf{IFR} is the fraction of $P_t$ that fails at turn $t$. IA, CA and IFR are
+averaged over turns. \textbf{CIF} is the number of the task's seven
+instructions that the final code satisfies. We also report \emph{base
+retention}, the fraction of dialogues whose final code still passes the
+original MBPP assertions, and the \emph{unprompted pass rate}, the fraction of
+instructions that already pass at turn~1, before they are issued. IA is
+comparable only within a protocol, because the dynamic protocol issues only
+instructions that the current code fails.
+
+\paragraph{Models and decoding.}
+We evaluate Llama-3.1-8B-Instruct, Qwen2.5-Coder-14B-Instruct, GPT-OSS-20B,
+Qwen3-Coder-30B-A3B-Instruct, and Gemma-4-31B-it. Each model is served locally
+with vLLM at native precision on a single NVIDIA A100-80GB (tensor
+parallelism 1, maximum context 16{,}384 tokens, seed 42). We decode greedily
+(temperature 0) with up to 2{,}048 new tokens per turn. For GPT-OSS-20B we set
+\texttt{reasoning\_effort=low}. No system prompt is used.
+
+\paragraph{Execution.}
+Candidate code runs in a temporary working directory with a memory cap. Each
+unit-test snippet runs in its own subprocess with a 15\,s timeout, so one crash
+does not fail the other snippets of the same requirement. If a turn contains no
+runnable code, the previous turn's code is kept. We reimplemented the reference
+harness because the released scripts hardcode hosted-API credentials. On the
+same 50 tasks our harness agrees closely with the reference one (static IA:
+Gemma-4-31B 0.773 vs.\ 0.770; Qwen2.5-Coder-14B 0.624 vs.\ 0.655).
+
+\subsection{Results}
+\label{app:multiturn-if-results}
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabular}{llcccccc}
+\toprule
+\textbf{Model} & \textbf{Protocol} & \textbf{IA}\,$\uparrow$ & \textbf{CA}\,$\uparrow$ & \textbf{IFR}\,$\downarrow$ & \textbf{CIF}/7\,$\uparrow$ & \textbf{Base ret.}\,$\uparrow$ & \textbf{Unpr.} \\
+\midrule
+\multirow{2}{*}{Llama-3.1-8B-Instruct}
+  & Static  & 0.572 & 0.540 & 0.165 & 1.96 & 0.240 & 0.463 \\
+  & Dynamic & 0.269 & 0.315 & 0.343 & 3.04 & 0.360 & 0.453 \\
+\midrule
+\multirow{2}{*}{Qwen2.5-Coder-14B-Instruct}
+  & Static  & 0.624 & 0.684 & 0.037 & 4.40 & 0.660 & 0.473 \\
+  & Dynamic & 0.318 & 0.536 & \textbf{0.022} & 5.02 & 0.760 & 0.480 \\
+\midrule
+\multirow{2}{*}{GPT-OSS-20B}
+  & Static  & 0.753 & 0.773 & 0.038 & 5.30 & \textbf{0.740} & 0.577 \\
+  & Dynamic & 0.569 & 0.686 & 0.048 & \textbf{6.20} & \textbf{0.820} & 0.567 \\
+\midrule
+\multirow{2}{*}{Qwen3-Coder-30B-A3B-Instruct}
+  & Static  & 0.661 & 0.755 & \textbf{0.031} & 4.68 & 0.700 & 0.456 \\
+  & Dynamic & 0.350 & 0.594 & 0.026 & 5.24 & 0.780 & 0.453 \\
+\midrule
+\multirow{2}{*}{Gemma-4-31B-it}
+  & Static  & \textbf{0.773} & \textbf{0.781} & 0.037 & \textbf{5.44} & 0.700 & 0.493 \\
+  & Dynamic & \textbf{0.623} & \textbf{0.706} & 0.033 & 6.18 & 0.800 & 0.493 \\
+\bottomrule
+\end{tabular}
+\caption{Multi-turn instruction following on CodeIF-Bench (50 function-level
+tasks, \emph{Functionality Extension} excluded). Bold marks the best value per
+protocol. IA is comparable only within a protocol. \emph{Base ret.}: fraction
+of dialogues whose final code still passes the original MBPP assertions.
+\emph{Unpr.}: fraction of instructions already satisfied before being issued;
+read CA and CIF relative to it.}
+\label{tab:mtif-main}
+\end{table*}
+
+Table~\ref{tab:mtif-main} reports the results. Gemma-4-31B-it has the highest
+IA and CA under both protocols, and GPT-OSS-20B is close behind. The four
+stronger models rarely break instructions they have already satisfied
+(IFR 0.02--0.05); they differ mainly in whether they satisfy the \emph{new}
+instruction (IA). Llama-3.1-8B-Instruct is the exception. Its static IA
+(0.572) is only 5 points below Qwen2.5-Coder-14B's, but its IFR is
+$4.5\times$ higher (0.165 vs.\ 0.037). In 76\% of its static dialogues, the
+final function no longer passes the original specification. It meets the
+current instruction by undoing earlier ones, which per-turn IA alone does not
+show. Between 45\% and 58\% of instructions pass before they are issued, mainly
+\emph{Exception Handling} and \emph{Code Complexity}, some of whose tests pass
+vacuously. CA and CIF should therefore be read relative to the unprompted
+rate.

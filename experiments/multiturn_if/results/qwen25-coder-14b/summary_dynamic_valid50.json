@@ -1,0 +1,197 @@
+{
+  "n_dialogues": 50,
+  "mode": "dynamic",
+  "IA": 0.3183279742765273,
+  "IA_first_attempt": 0.413265306122449,
+  "CA": 0.5364951768488746,
+  "IFR": 0.021543408360128618,
+  "CIF": 5.02,
+  "CIF_excl_base": 4.26,
+  "CIF_issued": 1.98,
+  "mean_instructions_issued": 3.92,
+  "final_CA": 0.5193333333333333,
+  "base_retained_rate": 0.76,
+  "mean_turns": 6.22,
+  "unprompted_pass_rate": 0.4798657718120805,
+  "by_instruction_type": {
+    "Annotation Coverage": {
+      "n": 50,
+      "IA_first_attempt": 0.42,
+      "IA_after_feedback": 0.13793103448275862,
+      "n_retries": 29,
+      "forget_rate_once_satisfied": 0.09523809523809523
+    },
+    "Base": {
+      "n": 50,
+      "IA_first_attempt": 0.48,
+      "IA_after_feedback": 0.4230769230769231,
+      "n_retries": 26,
+      "forget_rate_once_satisfied": 0.04597701149425287
+    },
+    "Code Complexity": {
+      "n": 3,
+      "IA_first_attempt": 0.0,
+      "IA_after_feedback": 0.0,
+      "n_retries": 3,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Code Standard": {
+      "n": 41,
+      "IA_first_attempt": 0.0,
+      "IA_after_feedback": 0.0,
+      "n_retries": 41,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Edge Case Handling": {
+      "n": 11,
+      "IA_first_attempt": 0.2727272727272727,
+      "IA_after_feedback": 0.375,
+      "n_retries": 8,
+      "forget_rate_once_satisfied": 0.2
+    },
+    "Exception Handling": {
+      "n": 27,
+      "IA_first_attempt": 0.9259259259259259,
+      "IA_after_feedback": 0.0,
+      "n_retries": 2,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Input-Output Conditions": {
+      "n": 14,
+      "IA_first_attempt": 0.5714285714285714,
+      "IA_after_feedback": 0.0,
+      "n_retries": 6,
+      "forget_rate_once_satisfied": 0.16666666666666666
+    }
+  },
+  "by_turn": {
+    "1": {
+      "n": 50,
+      "IA": 0.48,
+      "CA": 0.48,
+      "IFR": 0.0,
+      "upstream_ife": 0.48
+    },
+    "2": {
+      "n": 50,
+      "IA": 0.5,
+      "CA": 0.6,
+      "IFR": 0.0,
+      "upstream_ife": 0.3
+    },
+    "3": {
+      "n": 49,
+      "IA": 0.4897959183673469,
+      "CA": 0.6632653061224489,
+      "IFR": 0.0,
+      "upstream_ife": 0.22108843537414966
+    },
+    "4": {
+      "n": 47,
+      "IA": 0.2765957446808511,
+      "CA": 0.5921985815602837,
+      "IFR": 0.02127659574468085,
+      "upstream_ife": 0.14804964539007093
+    },
+    "5": {
+      "n": 41,
+      "IA": 0.17073170731707318,
+      "CA": 0.5284552845528455,
+      "IFR": 0.04065040650406504,
+      "upstream_ife": 0.10569105691056911
+    },
+    "6": {
+      "n": 30,
+      "IA": 0.16666666666666666,
+      "CA": 0.5011111111111111,
+      "IFR": 0.027777777777777776,
+      "upstream_ife": 0.08351851851851852
+    },
+    "7": {
+      "n": 19,
+      "IA": 0.05263157894736842,
+      "CA": 0.42105263157894735,
+      "IFR": 0.06578947368421052,
+      "upstream_ife": 0.06015037593984962
+    },
+    "8": {
+      "n": 10,
+      "IA": 0.0,
+      "CA": 0.42833333333333334,
+      "IFR": 0.08499999999999999,
+      "upstream_ife": 0.05354166666666667
+    },
+    "9": {
+      "n": 6,
+      "IA": 0.0,
+      "CA": 0.3222222222222222,
+      "IFR": 0.14166666666666666,
+      "upstream_ife": 0.03580246913580247
+    },
+    "10": {
+      "n": 5,
+      "IA": 0.0,
+      "CA": 0.32,
+      "IFR": 0.05,
+      "upstream_ife": 0.032
+    },
+    "11": {
+      "n": 1,
+      "IA": 0.0,
+      "CA": 0.0,
+      "IFR": 0.0,
+      "upstream_ife": 0.0
+    },
+    "12": {
+      "n": 1,
+      "IA": 0.0,
+      "CA": 0.0,
+      "IFR": 0.0,
+      "upstream_ife": 0.0
+    },
+    "13": {
+      "n": 1,
+      "IA": 0.0,
+      "CA": 0.0,
+      "IFR": 0.0,
+      "upstream_ife": 0.0
+    },
+    "14": {
+      "n": 1,
+      "IA": 0.0,
+      "CA": 0.0,
+      "IFR": 0.0,
+      "upstream_ife": 0.0
+    }
+  },
+  "forgetting_by_age": {
+    "1": {
+      "n": 101,
+      "forget_rate": 0.039603960396039604
+    },
+    "2": {
+      "n": 99,
+      "forget_rate": 0.0707070707070707
+    },
+    "3": {
+      "n": 69,
+      "forget_rate": 0.07246376811594203
+    },
+    "4": {
+      "n": 50,
+      "forget_rate": 0.06
+    },
+    "5": {
+      "n": 26,
+      "forget_rate": 0.07692307692307693
+    },
+    "6": {
+      "n": 14,
+      "forget_rate": 0.07142857142857142
+    },
+    "7": {
+      "n": 6,
+      "forget_rate": 0.16666666666666666
+    }
+  }
+}

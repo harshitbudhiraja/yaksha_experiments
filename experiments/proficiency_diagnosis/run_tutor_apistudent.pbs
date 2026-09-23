@@ -1,0 +1,117 @@
+#!/bin/bash
+#PBS -N pd_api
+#PBS -P sbtabular.spons
+#PBS -q standard
+#PBS -l select=1:ncpus=16:ngpus=1
+#PBS -l walltime=03:00:00
+#PBS -j oe
+#
+# Proficiency diagnosis with the STUDENT served by an API model instead of a
+# local one. Tutor stays local (fixed precision, reproducible); the student is
+# the variable under test.
+#
+# Purpose: every tutor so far scored WORSE with access to the gpt-oss-20b
+# student than blind. That is either a property of LLM assessors or an artifact
+# of that particular student simulator. A second, independent student model is
+# what separates the two.
+#
+# Only 1 GPU: the student no longer needs one.
+#
+# Required: -v MODEL=<tutor hf id>
+# Optional: STUDENT (deepseek/deepseek-v4-flash), N_PROFILES, TURNS, MAXLEN,
+#           CONC, VERSION
+#
+#   qsub -v MODEL=meta-llama/Llama-3.1-8B-Instruct run_tutor_apistudent.pbs
+
+set -uo pipefail
+
+source $HOME/miniconda3/etc/profile.d/conda.sh
+conda activate mbppeval
+export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1   # cached weights; avoids gated-repo 403 on Llama-3.1
+export VLLM_USE_FLASHINFER_SAMPLER=0
+export TOKENIZERS_PARALLELISM=false
+export TIKTOKEN_RS_CACHE_DIR=$HOME/harmony_cache
+
+: "${MODEL:?must pass -v MODEL=<tutor hf id>}"
+STUDENT="${STUDENT:-deepseek/deepseek-v4-flash}"
+N_PROFILES="${N_PROFILES:-100}"
+PROBLEMS="${PROBLEMS:-1}"
+TURNS="${TURNS:-8}"
+SEED="${SEED:-0}"
+MAXLEN="${MAXLEN:-16384}"
+CONC="${CONC:-64}"
+GPUUTIL="${GPUUTIL:-0.92}"
+VERSION="${VERSION:-apistudent100}"
+
+EXP=$HOME/yaksha_experiments/experiments/proficiency_diagnosis
+SAFE=$(echo "${MODEL}" | tr '/' '_')
+OUT=${EXP}/results/${VERSION}/${SAFE}
+mkdir -p "${OUT}"
+exec > "${OUT}/job.log" 2>&1
+
+PORT=$((8400 + RANDOM % 90))
+TURL="http://127.0.0.1:${PORT}/v1"
+SURL="https://openrouter.ai/api/v1"
+
+echo "########## tutor=${MODEL}  student=${STUDENT} on $(hostname) $(date) ##########"
+echo "profiles=${N_PROFILES} problems=${PROBLEMS} turns=${TURNS} seed=${SEED} concurrency=${CONC}"
+nvidia-smi --query-gpu=name,memory.total --format=csv || true
+
+# --- proxy: the student lives on OpenRouter, which needs an authenticated IP --
+nohup bash $HOME/proxy.sh > /tmp/proxy_pd_$$.log 2>&1 &
+PROXY_PID=$!
+for i in $(seq 1 20); do
+  grep -q "proxy login" /tmp/proxy_pd_$$.log 2>/dev/null && { echo "proxy authenticated"; break; }
+  sleep 3
+done
+export http_proxy=http://proxy21.iitd.ac.in:3128 https_proxy=http://proxy21.iitd.ac.in:3128
+curl -s --max-time 30 -o /dev/null -w "openrouter: http=%{http_code}\n" "${SURL}/models"
+# Prove the student model itself answers, not just that the API is reachable.
+curl -s --max-time 120 "${SURL}/chat/completions" \
+  -H "Authorization: Bearer $(cat $HOME/.openrouter_key)" \
+  -H 'Content-Type: application/json' \
+  -d "{\"model\":\"${STUDENT}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say: ready\"}],\"max_tokens\":64}" \
+  | grep -q '"choices"' || { echo "FATAL: student model ${STUDENT} not answering"; exit 1; }
+echo "student probe OK"
+
+# --- tutor served locally, at native precision ------------------------------
+# served-model-name is the real HF id so it lands in the rollout metadata:
+# earlier runs recorded only the alias "tutor", which destroyed provenance.
+CUDA_VISIBLE_DEVICES=0 vllm serve "${MODEL}" \
+  --served-model-name "${MODEL}" --port "${PORT}" \
+  --tensor-parallel-size 1 --max-model-len "${MAXLEN}" \
+  --gpu-memory-utilization "${GPUUTIL:-0.92}" --seed 42 \
+  > "${OUT}/vllm_tutor.log" 2>&1 &
+VPID=$!
+trap 'kill ${VPID} ${PROXY_PID} 2>/dev/null' EXIT
+
+for i in $(seq 1 150); do
+  curl -s --max-time 5 --noproxy '*' "${TURL}/models" | grep -q "${MODEL}" && { echo "tutor up"; break; }
+  kill -0 ${VPID} 2>/dev/null || { echo "FATAL: vllm died"; tail -40 "${OUT}/vllm_tutor.log"; exit 1; }
+  sleep 10
+done
+curl -s --max-time 180 --noproxy '*' "${TURL}/chat/completions" -H 'Content-Type: application/json' \
+  -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say: ready\"}],\"max_tokens\":2048}" \
+  | grep -q '"choices"' || { echo "FATAL: tutor cannot generate"; tail -40 "${OUT}/vllm_tutor.log"; exit 1; }
+echo "tutor probe OK"
+
+# localhost must bypass the proxy, or tutor calls get routed to proxy21
+export no_proxy="127.0.0.1,localhost" NO_PROXY="127.0.0.1,localhost"
+
+cd "${EXP}"
+echo "=== ROLLOUTS $(date) ==="
+python -u run_rollouts.py \
+  --tutor-model "${MODEL}"   --tutor-base-url "${TURL}" \
+  --student-model "${STUDENT}" --student-base-url "${SURL}" \
+  --student-api-key "$(cat $HOME/.openrouter_key)" \
+  --max-tokens 4096 --difficulty Easy \
+  --n-profiles ${N_PROFILES} --problems ${PROBLEMS} --turns ${TURNS} \
+  --profile-seed ${SEED} --concurrency ${CONC} \
+  --conditions interactive one_shot blind \
+  --output "${OUT}/rollouts.jsonl"
+
+echo "=== EVALUATE $(date) ==="
+python -u evaluate.py --rollouts "${OUT}/rollouts.jsonl" \
+  --output "${OUT}/episode_scores.jsonl" --summary "${OUT}/summary.json"
+
+echo "########## DONE $(date) ##########"

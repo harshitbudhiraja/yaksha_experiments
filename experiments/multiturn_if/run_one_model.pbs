@@ -1,0 +1,103 @@
+#!/bin/bash
+#PBS -N mtif
+#PBS -P sbtabular.spons
+#PBS -q standard
+#PBS -l select=1:ncpus=16:ngpus=1
+#PBS -l walltime=03:00:00
+#PBS -j oe
+#
+# One model through CodeIF-Bench L_1 (all 70 tasks), both interaction modes.
+#
+# One model per job (not all three in one) so they queue independently and run
+# in parallel as GPUs free up -- same rationale as run_one_tutor.pbs.
+#
+# Required:  -v MODEL_ID=<hf id>,MODEL_SHORT=<name>
+# Optional:  MAXLEN (default 16384), EFFORT (gpt-oss only: low/medium/high),
+#            MODES (default "dynamic static"), LIMIT (default: all 70)
+#
+# Example:
+#   qsub -v MODEL_ID=meta-llama/Llama-3.1-8B-Instruct,MODEL_SHORT=llama31-8b \
+#        run_one_model.pbs
+
+set -uo pipefail
+
+source $HOME/miniconda3/etc/profile.d/conda.sh
+conda activate mbppeval
+
+export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1
+export VLLM_USE_FLASHINFER_SAMPLER=0
+export TOKENIZERS_PARALLELISM=false
+export TIKTOKEN_RS_CACHE_DIR=$HOME/harmony_cache
+# The cluster sets http_proxy; without this every localhost call goes to Squid.
+export no_proxy=localhost,127.0.0.1 NO_PROXY=localhost,127.0.0.1
+
+: "${MODEL_ID:?must pass -v MODEL_ID=<hf id>}"
+: "${MODEL_SHORT:?must pass -v MODEL_SHORT=<short name>}"
+MAXLEN="${MAXLEN:-16384}"
+EFFORT="${EFFORT:-}"
+MODES="${MODES:-dynamic static}"
+LIMIT="${LIMIT:-}"
+
+EXP=$HOME/yaksha_experiments/experiments/multiturn_if
+OUT=${EXP}/results/${MODEL_SHORT}
+mkdir -p "${OUT}"
+exec > "${OUT}/job.log" 2>&1
+
+PORT=$((8700 + RANDOM % 100))
+URL="http://127.0.0.1:${PORT}/v1"
+
+echo "########## multiturn_if: ${MODEL_SHORT} on $(hostname) : $(date) ##########"
+echo "model=${MODEL_ID} modes='${MODES}' maxlen=${MAXLEN} effort='${EFFORT}' limit='${LIMIT:-all}'"
+nvidia-smi --query-gpu=index,name,memory.total --format=csv || true
+
+wait_for_server () {  # url served_name pid label
+  for i in $(seq 1 180); do
+    curl -s --max-time 5 "$1/models" | grep -q "$2" && { echo "  [$4] server up"; return 0; }
+    kill -0 "$3" 2>/dev/null || { echo "  [$4] FATAL: server died"; return 1; }
+    sleep 10
+  done
+  echo "  [$4] FATAL: server never ready"; return 1
+}
+
+probe_generation () {  # url served_name label
+  local r
+  r=$(curl -s --max-time 180 "$1/chat/completions" -H 'Content-Type: application/json' \
+      -d "{\"model\":\"$2\",\"messages\":[{\"role\":\"user\",\"content\":\"Say: ready\"}],\"max_tokens\":2048}")
+  echo "$r" | grep -q '"choices"' && { echo "  [$3] generation probe OK"; return 0; }
+  echo "  [$3] FATAL: probe failed: ${r:0:300}"; return 1
+}
+
+echo "=== serving ${MODEL_ID} : $(date) ==="
+vllm serve "${MODEL_ID}" \
+  --served-model-name mut --port "${PORT}" \
+  --tensor-parallel-size 1 --max-model-len "${MAXLEN}" \
+  --gpu-memory-utilization 0.90 --seed 42 \
+  > "${OUT}/vllm.log" 2>&1 &
+VPID=$!
+trap 'echo cleanup; kill ${VPID} 2>/dev/null' EXIT
+
+wait_for_server "${URL}" mut ${VPID} "${MODEL_SHORT}" || { tail -40 "${OUT}/vllm.log"; exit 1; }
+probe_generation "${URL}" mut "${MODEL_SHORT}" || { tail -40 "${OUT}/vllm.log"; exit 1; }
+
+EFFORT_ARG=()
+[ -n "${EFFORT}" ] && EFFORT_ARG=(--reasoning-effort "${EFFORT}")
+LIMIT_ARG=()
+[ -n "${LIMIT}" ] && LIMIT_ARG=(--limit "${LIMIT}")
+
+cd "${EXP}"
+for MODE in ${MODES}; do
+  echo "=== ${MODE} : $(date) ==="
+  python -u run_dialogue.py \
+    --base-url "${URL}" --model mut \
+    --mode "${MODE}" --max-tokens 2048 \
+    --concurrency 8 --test-concurrency 4 \
+    "${EFFORT_ARG[@]}" "${LIMIT_ARG[@]}" \
+    --output "${OUT}/dialogues_${MODE}.jsonl" || { echo "FAILED ${MODE}"; continue; }
+
+  python -u evaluate.py \
+    --dialogues "${OUT}/dialogues_${MODE}.jsonl" \
+    --output "${OUT}/results_${MODE}.jsonl" \
+    --summary "${OUT}/summary_${MODE}.json"
+done
+
+echo "########## DONE ${MODEL_SHORT} $(date) ##########"

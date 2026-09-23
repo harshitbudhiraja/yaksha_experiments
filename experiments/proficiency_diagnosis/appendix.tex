@@ -1,0 +1,480 @@
+% ---------------------------------------------------------------------------
+% Appendix for the tutor-as-diagnostician experiment (ACL style).
+%
+% Requires in the preamble:
+%   \usepackage{booktabs}
+%   \usepackage{listings}
+%   \usepackage{xcolor}
+%   \usepackage{amsmath}
+%   \usepackage{multirow}
+%
+% and the prompt-listing style defined in Sec.~\ref{app:prompts} below
+% (\lstdefinestyle{promptstyle}).
+% ---------------------------------------------------------------------------
+
+\appendix
+
+\section{Experimental Setup}
+\label{app:setup}
+
+\subsection{Task Formulation}
+\label{app:task}
+
+A simulated student is conditioned on a ground-truth proficiency profile
+$P_{\text{true}} : \mathcal{T} \rightarrow \{1,2,3,4,5\}$, where $\mathcal{T} =
+\{S_1,\dots,S_{12}\}$ is the twelve-stage cognitive flow of
+Table~\ref{tab:stages}. A tutor model interacts with the student for at most
+$N$ turns and must recover $P_{\text{true}}$ without ever observing it. Each
+turn the tutor emits a complete belief vector $P^{(t)}_{\text{pred}}$ over all
+twelve stages; the belief at the terminal turn is taken as
+$P_{\text{pred}}$.
+
+The rollout proceeds as follows. At $t=0$ the student is shown the problem and
+produces a first attempt (a fixed, non-adaptive prompt identical across all
+conditions). For $t = 1,\dots,N$ the tutor observes the transcript so far and
+emits a JSON action containing a natural-language probe, the stages that probe
+targets, a belief vector, per-stage confidences, and a binary \texttt{stop}
+flag. If \texttt{stop} is set the interview terminates early and that turn's
+belief is final; otherwise the probe is sent to the student and the loop
+continues.
+
+Requiring a belief vector at \emph{every} turn (rather than only at the end)
+is what makes convergence measurable: it yields an error-versus-turn curve
+instead of a single endpoint. The explicit \texttt{stop} flag separates
+``the tutor believes it is finished'' from ``the tutor exhausted its budget,''
+which are different diagnoses of the same final error.
+
+\subsection{Stage Taxonomy}
+\label{app:stages}
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabular}{@{}llp{5.0cm}p{4.6cm}@{}}
+\toprule
+\textbf{Stage} & \textbf{Band} & \textbf{Captures} & \textbf{Representative bug class} \\
+\midrule
+$S_1$ Language Understanding  & pre-coding  & Parse statement, identify I/O and constraints & Inclusive bound read as exclusive \\
+$S_2$ Problem Decomposition   & pre-coding  & Split into sub-problems, enumerate edge cases & Missing branch for empty input \\
+$S_3$ Algorithm Formation     & pre-coding  & Devise a solution strategy & Greedy choice where DP is required \\
+$S_4$ Algorithm Correctness   & pre-coding  & Verify the approach is sound & Recursion with an incorrect base case \\
+$S_5$ Complexity Analysis     & pre-coding  & Reason about time/space cost & Nested scan in place of a hash lookup \\
+$S_6$ Approach Finalization   & pre-coding  & Pick data structures, fix the plan & List used for membership tests \\
+$S_7$ Code Translation        & code-level  & Turn the algorithm into code & Planned step omitted in implementation \\
+$S_8$ Syntax Proficiency      & code-level  & Use language constructs correctly & Integer division for a real quantity \\
+$S_9$ Code Correctness        & code-level  & Code matches intended logic & \texttt{<} in place of \texttt{<=} \\
+$S_{10}$ Debugging            & code-level  & Spot and fix bugs on the fly & Shadowed variable, silent wrong value \\
+$S_{11}$ Test-Case Checking   & code-level  & Validate with tests, edge cases & Passes visible tests, fails on duplicates \\
+$S_{12}$ Verification         & code-level  & Confirm output, refine/optimize & Correct value, wrong return type \\
+\bottomrule
+\end{tabular}
+\caption{The twelve-stage cognitive flow used as the latent skill space. The
+tutor is shown the stage name, band, \emph{Captures} description and
+representative bug class, together with the generic level scale of
+Table~\ref{tab:levels}; it is never shown per-stage behavioral anchors.}
+\label{tab:stages}
+\end{table*}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}cp{5.6cm}@{}}
+\toprule
+\textbf{Level} & \textbf{Descriptor} \\
+\midrule
+1 & \textbf{Absent.} Does not perform this step at all, or performs it in a way that is actively wrong. \\
+2 & \textbf{Fragile.} Attempts the step but usually gets it wrong; needs heavy scaffolding. \\
+3 & \textbf{Inconsistent.} Correct on familiar or simple cases; breaks down as the problem varies. \\
+4 & \textbf{Solid.} Usually correct; minor slips only under added complexity. \\
+5 & \textbf{Fluent.} Reliably correct, self-checks unprompted, can explain \emph{why}. \\
+\bottomrule
+\end{tabular}
+\caption{The proficiency scale, applied independently to each of the twelve
+stages. The same descriptors are shown to both tutor and student.}
+\label{tab:levels}
+\end{table}
+
+\subsection{Ground-Truth Profile Population}
+\label{app:profiles}
+
+Uniformly random profiles make a weak test set: they average out, and a
+constant predictor scores well against them. We therefore sample profiles from
+a mixture of archetypes (Table~\ref{tab:archetypes}), each targeting a distinct
+failure mode of the tutor. Levels are jittered by $\pm 1$ with probability
+$0.35$ (except \texttt{flat\_mid}) so that archetypes are not degenerate
+constants. The population is deterministic given the seed, so every tutor is
+evaluated against an identical set of students on identical problems.
+
+For the $n{=}1000$ population the resulting level histogram is
+$\{1{:}1438,\, 2{:}2430,\, 3{:}2513,\, 4{:}4005,\, 5{:}1614\}$ over
+$1000 \times 12$ stage assignments, with $957$ distinct profile vectors. The
+\texttt{spiky\_deficit} weak stage is cycled deterministically across
+$S_1 \dots S_{12}$ rather than sampled, giving exactly $20$ single-stage
+deficits per stage and hence even per-stage coverage. The $40$
+\texttt{flat\_mid} profiles are deliberately identical, providing a
+test--retest reliability estimate at no additional cost.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lrp{3.5cm}@{}}
+\toprule
+\textbf{Archetype} & \textbf{$n$} & \textbf{Shape} \\
+\midrule
+\texttt{uniform\_random}        & 300 & unstructured \\
+\texttt{spiky\_deficit}         & 240 & one stage at 1, rest $\approx 4$ \\
+\texttt{band\_split\_plan\_weak}& 120 & $S_1$--$S_6$ low, $S_7$--$S_{12}$ high \\
+\texttt{band\_split\_code\_weak}& 120 & $S_1$--$S_6$ high, $S_7$--$S_{12}$ low \\
+\texttt{novice}                 & 100 & $\approx 2$ everywhere \\
+\texttt{strong}                 &  80 & $\approx 4$ everywhere \\
+\texttt{flat\_mid}              &  40 & exactly 3 everywhere \\
+\midrule
+\textbf{Total}                  & \textbf{1000} & \\
+\bottomrule
+\end{tabular}
+\caption{Archetype mixture for the $n{=}1000$ profile population
+(\texttt{profile\_seed}$=0$).}
+\label{tab:archetypes}
+\end{table}
+
+\subsection{Conditions}
+\label{app:conditions}
+
+Localization error is not interpretable in isolation, so each tutor is
+evaluated under three levels of access to the student:
+
+\begin{itemize}
+\itemsep0em
+\item \textbf{\texttt{interactive}} --- the full protocol: the student's first
+attempt followed by $N$ probe/response rounds ($\approx 2N{+}1$ model calls).
+\item \textbf{\texttt{one\_shot}} --- the tutor observes only the student's
+first attempt and must score immediately, with no probing (2 calls). The gap
+to \texttt{interactive} isolates the \emph{value of probing}.
+\item \textbf{\texttt{blind}} --- the tutor never observes the student at all
+and predicts from the problem statement and priors over CS1 students alone
+(1 call). This is a prior-only floor and doubles as a validity check: if
+\texttt{interactive} does not improve on \texttt{blind}, either the simulated
+student is not expressing its latent vector or the tutor is not using the
+dialogue.
+\end{itemize}
+
+\subsection{Models}
+\label{app:models}
+
+The student model is held fixed at \texttt{openai/gpt-oss-20b} in every
+condition and for every tutor, so that the task itself is constant across the
+comparison. Table~\ref{tab:models} lists the tutors under evaluation. Note
+that the \texttt{gpt-oss-20b} tutor cell is \emph{self-play}: tutor and
+student share a distribution, so its score carries a shared-idiosyncrasy
+advantage of unknown magnitude and is not directly comparable to the
+cross-model cells. It is reported as a control rather than as a peer system.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Role} & \textbf{Model} & \textbf{Ctx.} \\
+\midrule
+Student (fixed) & \texttt{openai/gpt-oss-20b} & 16{,}384 \\
+\midrule
+\multirow{5}{*}{Tutor}
+ & \texttt{meta-llama/Llama-3.1-8B-Instruct}    & 16{,}384 \\
+ & \texttt{Qwen/Qwen2.5-Coder-14B-Instruct}     & 16{,}384 \\
+ & \texttt{openai/gpt-oss-20b}$^{\dagger}$      & 16{,}384 \\
+ & \texttt{google/gemma-4-31B-it}               & 12{,}288 \\
+ & \texttt{Qwen/Qwen3-Coder-30B-A3B-Instruct}   & 12{,}288 \\
+\bottomrule
+\end{tabular}
+\caption{Models. $^{\dagger}$self-play control (identical to the student
+model). Context lengths are the vLLM \texttt{--max-model-len} used when
+serving; the two largest models use a shorter context so that weights and KV
+cache fit a single 80\,GB device.}
+\label{tab:models}
+\end{table}
+
+\subsection{Decoding and Serving Configuration}
+\label{app:config}
+
+All models are served locally with vLLM 0.26.0 on NVIDIA A100-SXM4-80GB
+devices (one device per role, tensor-parallel size 1,
+\texttt{--gpu-memory-utilization} 0.90 for the student and 0.92 for the
+tutor, server seed 42). Table~\ref{tab:hparams} lists the decoding and
+protocol hyperparameters.
+
+The tutor is decoded at a lower temperature than the student: the tutor must
+emit parseable JSON and a stable belief, whereas the student is meant to
+exhibit the variability of a real learner. For reasoning models exposing a
+\texttt{reasoning\_effort} control, it is set to \texttt{low} independently per
+role; the parameter is omitted entirely for models that do not implement it.
+Because such models may return an empty \texttt{content} field with the
+generation placed in a separate reasoning channel, the client falls back to
+that channel when \texttt{content} is empty.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Probe budget $N$                    & 8 \\
+Profiles                            & 1000 \\
+Problems per profile                & 1 \\
+Conditions                          & 3 \\
+Episodes per tutor                  & 3000 \\
+Model calls per tutor ($\approx$)   & 20{,}000 \\
+\midrule
+Tutor temperature                   & 0.3 \\
+Student temperature                 & 0.7 \\
+\texttt{max\_tokens} (both roles)   & 4096 \\
+\texttt{reasoning\_effort}          & low$^{\ddagger}$ \\
+Request timeout (s)                 & 180 \\
+Client-side retries                 & 2 (exp.\ backoff) \\
+Episode concurrency                 & 16 \\
+\texttt{profile\_seed}              & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Protocol and decoding hyperparameters. $^{\ddagger}$applied only to
+models implementing the parameter.}
+\label{tab:hparams}
+\end{table}
+
+\subsection{Problem Source}
+\label{app:problems}
+
+Problems are drawn from the \texttt{test} split of
+\texttt{newfacade/LeetCodeDataset}, filtered to \texttt{difficulty}
+$=$ \texttt{Easy} ($48$ problems available). Each profile is interviewed on
+the first $k$ problems of that filtered split, with $k$ fixed across tutors.
+Easy competitive-programming problems are an approximation of CS1 coursework
+rather than a substitute for it; we note this as a construct-validity
+limitation in Section~\ref{app:limitations}.
+
+\subsection{Metrics}
+\label{app:metrics}
+
+\paragraph{Localization accuracy.} The mean absolute distance between the
+predicted and true profile,
+\begin{equation}
+d(P_{\text{pred}}, P_{\text{true}}) =
+\frac{1}{|\mathcal{T}|} \sum_{c \in \mathcal{T}}
+\bigl| P_{\text{pred}}(c) - P_{\text{true}}(c) \bigr| .
+\end{equation}
+
+Because a constant predictor already attains a low MAE against a realistic
+profile distribution, we report it against the best constant baseline chosen
+with hindsight over the same population,
+$\text{MAE}^{*}_{\text{const}} = \min_{v \in \{1..5\}} \mathbb{E}\,
+d(\mathbf{v}, P_{\text{true}})$, and define
+\begin{equation}
+\Delta_{\text{skill}} = \text{MAE}^{*}_{\text{const}} - d(P_{\text{pred}}, P_{\text{true}}),
+\end{equation}
+where $\Delta_{\text{skill}} \le 0$ indicates the tutor extracted no usable
+information about the individual student.
+
+\paragraph{Convergence cost.} Reported three ways, since they can disagree
+informatively: (i) \emph{declared stop turn}, the turn at which the tutor set
+\texttt{stop}; (ii) \emph{stabilization turn}, the first turn after which the
+belief vector moves by at most $\epsilon = 0.25$ per stage for $2$ consecutive
+turns; and (iii) \emph{turns to best}, the first turn at which the error curve
+reaches its final value. We additionally report AUC-MAE, the mean of the
+per-turn error curve, which rewards being both accurate and early.
+
+\paragraph{Supporting diagnostics.} Signed bias (systematic leniency),
+Spearman $\rho$ between predicted and true profile (shape recovery
+independent of calibration), within-one-level rate, exact-match rate,
+bottom-$3$ deficit recall, predicted level spread (range compression),
+per-stage MAE, probe targeting counts, JSON parse-failure rate, and a
+student-leakage rate that flags episodes in which the simulated student named
+a stage, a rubric, or a numeric self-rating.
+
+\subsection{Prompts}
+\label{app:prompts}
+
+\lstdefinestyle{promptstyle}{
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  frame=single,
+  framesep=4pt,
+  xleftmargin=4pt,
+  showstringspaces=false
+}
+
+\paragraph{Tutor system prompt.} \texttt{\{rubric\}} is substituted with
+Tables~\ref{tab:stages} and~\ref{tab:levels} rendered as plain text, and
+\texttt{\{budget\}} with $N$.
+
+\begin{lstlisting}[style=promptstyle]
+You are an expert CS1 instructor running a diagnostic interview with one
+student about one problem. Your only goal is to work out *where in their
+problem-solving process* they are weak -- not to teach, not to give them
+the answer.
+
+{rubric}
+
+You get at most {budget} turns. On each turn you send the student one
+message and see their reply. After each reply you must report your current
+best estimate of their level (1-5) for all 12 stages, even the ones you
+have no evidence about yet (guess, and refine later).
+
+Probing advice: a probe that only asks "do you understand?" tells you
+nothing. Good probes force the student to *perform* the stage you are
+unsure about -- ask them to trace an input, predict an output, justify a
+choice, produce a test case, find a bug you point at, or state a
+complexity. You may only send messages a real tutor could send; do not ask
+the student to reveal hidden state or rate themselves numerically.
+
+Respond on EVERY turn with a single JSON object and nothing else:
+
+{
+  "reasoning": "<2-4 sentences: what the last reply told you and what you still need>",
+  "target_stages": ["S3", "S5"],
+  "probe": "<the exact message to send the student>",
+  "belief": {"S1": 3, "S2": 3, "S3": 3, "S4": 3, "S5": 3, "S6": 3,
+             "S7": 3, "S8": 3, "S9": 3, "S10": 3, "S11": 3, "S12": 3},
+  "confidence": {"S1": 0.2, "S2": 0.2, "S3": 0.2, "S4": 0.2, "S5": 0.2,
+                 "S6": 0.2, "S7": 0.2, "S8": 0.2, "S9": 0.2, "S10": 0.2,
+                 "S11": 0.2, "S12": 0.2},
+  "stop": false
+}
+
+`belief` must contain all 12 stages with integer values 1-5. `confidence`
+is 0.0-1.0 per stage. Set "stop": true only when further probing would not
+change your profile; your belief on that turn becomes final and the
+interview ends early. Use the full 1-5 range -- a student who cannot do a
+stage at all is a 1, and refusing to assign extreme values will make your
+diagnosis wrong.
+\end{lstlisting}
+
+\paragraph{Tutor turn prompt.} Each turn the user message contains the problem
+statement, the transcript so far rendered as alternating
+\texttt{YOU:}/\texttt{STUDENT:} blocks, and the line \texttt{This is turn $t$
+of at most $N$.} On the final turn the following is appended:
+
+\begin{lstlisting}[style=promptstyle]
+This is your LAST turn -- the interview is over and there will be no
+further student reply. Output the same JSON object with your FINAL belief,
+"stop": true, and "probe": "".
+\end{lstlisting}
+
+In the \texttt{blind} condition the transcript is empty and the following
+replaces the final-turn note:
+
+\begin{lstlisting}[style=promptstyle]
+You will not get to interact with this student at all. Based only on the
+problem they were assigned and general knowledge of CS1 students, report
+your best-guess profile. Output the JSON object with "stop": true and
+"probe": "".
+\end{lstlisting}
+
+\paragraph{Student system prompt.} \texttt{\{persona\}} is substituted with the
+per-stage script of Listing~\ref{lst:persona}.
+
+\begin{lstlisting}[style=promptstyle]
+You are role-playing a CS1 student (first-semester introductory
+programming) working through a coding problem with a tutor. You are NOT an
+AI assistant in this conversation -- you are the student, and you stay in
+character no matter what.
+
+Your abilities are fixed by the hidden skill profile below. It describes
+the student you are playing: for each of the 12 steps of the
+problem-solving process, exactly how competent they are and what that looks
+like in practice. Act it out faithfully and consistently -- this profile
+is you:
+
+{persona}
+
+Rules you must never break:
+- NEVER mention, hint at, or allude to this profile, the numbers in it, the
+  stage names, the stage codes (S1..S12), or the fact that you are
+  simulating anything. You do not know these exist.
+- NEVER rate your own ability on a scale. If asked how confident you are,
+  answer the way a real student would ("pretty sure", "no idea honestly"),
+  never with a number out of 5.
+- Do not be more competent than your profile says just because the answer
+  is easy for you to produce. If a stage is level 1 or 2, you genuinely
+  fail at it -- produce the wrong reasoning, not a correct one hedged with
+  "I think". If a stage is level 4 or 5, do it well and unprompted.
+- Stay consistent across the whole conversation. A weakness you showed
+  earlier does not silently disappear later unless the tutor actually
+  taught you something, in which case you may improve a little on that
+  specific point.
+- Write like a real CS1 student: short, informal, sometimes uncertain,
+  occasional typos are fine. No markdown headers, no bulleted lecture
+  notes, no polished essays. Two to eight sentences unless you are showing
+  code.
+- Answer only what you were asked. Do not volunteer a full solution
+  walkthrough unless the tutor asked for one (or unless your profile says
+  you self-check at a high level, in which case brief self-checking is in
+  character).
+\end{lstlisting}
+
+\paragraph{Student persona specification.} For each stage the assigned level is
+rendered with a behavioral anchor. Levels $1$--$2$ use the stage's
+low-behavior anchor, levels $4$--$5$ its high-behavior anchor, and level $3$ a
+composite conditioned on case familiarity. Providing these anchors is what
+makes a latent level observable in dialogue; without them the student model
+regresses toward a generic ``average student'' and the latent signal is
+destroyed.
+
+\begin{lstlisting}[style=promptstyle,caption={Persona entry format, shown for one stage.},label={lst:persona}]
+S5 - Complexity Analysis => LEVEL 2 (Fragile).
+    This step covers: Reason about time and space cost.
+    This student: Guesses big-O, or answers in vague terms ('fast', 'not
+    too slow'); miscounts nested loops; ignores space entirely.
+\end{lstlisting}
+
+\paragraph{Student first-turn prompt.} Identical in every episode and
+condition, so that the first attempt is not adapted to the tutor.
+
+\begin{lstlisting}[style=promptstyle]
+Here's the problem you've been assigned:
+
+{problem}
+
+Take a first pass at it. Briefly say how you're reading the problem and
+what your plan is, then write your attempt at the code in a ```python
+block. Do this the way you naturally would -- don't try to be thorough if
+that's not how you work.
+\end{lstlisting}
+
+\subsection{Robustness and Implementation Details}
+\label{app:robustness}
+
+\paragraph{Output parsing.} Tutor actions are extracted with a tolerant parser
+that accepts a fenced JSON block, the widest brace-delimited span, or a bare
+object, and coerces out-of-range levels into $\{1,\dots,5\}$. A malformed
+response is retried once with the parser's complaint appended; if it still
+fails, the previous turn's belief is carried forward and the turn is recorded
+as a format failure. Parse-failure rate is reported as a compliance metric
+rather than silently discarded.
+
+\paragraph{Chat-template compatibility.} Some chat templates do not define a
+\texttt{system} role. When a request is rejected for this reason, the client
+folds the system prompt into the first user message and retries, so that
+template differences do not confound the model comparison.
+
+\paragraph{Episode independence.} Each episode is an independent conversation;
+no state carries across episodes. The student is re-prompted with the full
+transcript each turn so that its behavior remains consistent within an
+episode.
+
+\subsection{Limitations}
+\label{app:limitations}
+
+Every measurement here is conditional on the simulated student faithfully
+expressing $P_{\text{true}}$. The \texttt{blind} condition and the
+student-leakage rate are built-in validity checks, but neither establishes
+fidelity; they only detect gross failure. A stronger check, which we do not
+perform, is a paired design over profiles differing in exactly one stage,
+verifying that the tutor's belief moves on that stage and not on others.
+
+A capable student model may also be unable to convincingly portray level-1
+behavior, since competence leaks through; error at the low end of the scale
+should therefore be interpreted with care and compared across student models
+before being attributed to the tutor. Finally, the twelve stages are scored
+independently although they are not independent in practice (a weak $S_3$
+constrains $S_7$), and mean absolute error ignores this structure.

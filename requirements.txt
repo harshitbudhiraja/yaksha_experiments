@@ -1,0 +1,11 @@
+datasets>=2.19.0
+openai>=1.30.0
+tqdm>=4.66.0
+
+# Only needed for experiments/multiturn_if/ -- imported by CodeIF-Bench's own
+# complexity/style unit tests, not by this repo's code:
+mccabe>=0.7.0
+pycodestyle>=2.11.0
+
+# Only needed for experiments/solving_ability/ (lm-evaluation-harness wrapper):
+#   pip install "lm_eval[api]"

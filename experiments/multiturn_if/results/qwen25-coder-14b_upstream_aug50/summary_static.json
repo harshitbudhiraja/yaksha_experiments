@@ -1,0 +1,144 @@
+{
+  "n_dialogues": 50,
+  "mode": "static",
+  "IA": 0.6551724137931034,
+  "IA_first_attempt": 0.6551724137931034,
+  "CA": 0.7147372742200329,
+  "IFR": 0.057662835249042144,
+  "CIF": 4.44,
+  "CIF_excl_base": 3.7,
+  "CIF_issued": 4.44,
+  "mean_instructions_issued": 6.96,
+  "final_CA": 0.6385714285714286,
+  "base_retained_rate": 0.74,
+  "mean_turns": 6.96,
+  "unprompted_pass_rate": 0.46308724832214765,
+  "by_instruction_type": {
+    "Annotation Coverage": {
+      "n": 50,
+      "IA_first_attempt": 0.4,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.025
+    },
+    "Base": {
+      "n": 50,
+      "IA_first_attempt": 0.56,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.07623318385650224
+    },
+    "Code Complexity": {
+      "n": 50,
+      "IA_first_attempt": 0.92,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Code Standard": {
+      "n": 50,
+      "IA_first_attempt": 0.2,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Edge Case Handling": {
+      "n": 48,
+      "IA_first_attempt": 0.7708333333333334,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.05172413793103448
+    },
+    "Exception Handling": {
+      "n": 50,
+      "IA_first_attempt": 0.9,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.16853932584269662
+    },
+    "Input-Output Conditions": {
+      "n": 50,
+      "IA_first_attempt": 0.84,
+      "IA_after_feedback": null,
+      "n_retries": 0,
+      "forget_rate_once_satisfied": 0.09004739336492891
+    }
+  },
+  "by_turn": {
+    "1": {
+      "n": 50,
+      "IA": 0.56,
+      "CA": 0.56,
+      "IFR": 0.0,
+      "upstream_ife": 0.56
+    },
+    "2": {
+      "n": 50,
+      "IA": 0.84,
+      "CA": 0.8,
+      "IFR": 0.02,
+      "upstream_ife": 0.4
+    },
+    "3": {
+      "n": 50,
+      "IA": 0.9,
+      "CA": 0.8133333333333334,
+      "IFR": 0.04,
+      "upstream_ife": 0.2711111111111111
+    },
+    "4": {
+      "n": 50,
+      "IA": 0.78,
+      "CA": 0.79,
+      "IFR": 0.04666666666666666,
+      "upstream_ife": 0.1975
+    },
+    "5": {
+      "n": 50,
+      "IA": 0.4,
+      "CA": 0.716,
+      "IFR": 0.06,
+      "upstream_ife": 0.1432
+    },
+    "6": {
+      "n": 50,
+      "IA": 0.9,
+      "CA": 0.6866666666666666,
+      "IFR": 0.14666666666666667,
+      "upstream_ife": 0.11444444444444445
+    },
+    "7": {
+      "n": 48,
+      "IA": 0.1875,
+      "CA": 0.6339285714285714,
+      "IFR": 0.09166666666666666,
+      "upstream_ife": 0.09056122448979592
+    }
+  },
+  "forgetting_by_age": {
+    "1": {
+      "n": 234,
+      "forget_rate": 0.021367521367521368
+    },
+    "2": {
+      "n": 187,
+      "forget_rate": 0.06951871657754011
+    },
+    "3": {
+      "n": 163,
+      "forget_rate": 0.15337423312883436
+    },
+    "4": {
+      "n": 124,
+      "forget_rate": 0.1774193548387097
+    },
+    "5": {
+      "n": 79,
+      "forget_rate": 0.08860759493670886
+    },
+    "6": {
+      "n": 27,
+      "forget_rate": 0.037037037037037035
+    }
+  }
+}

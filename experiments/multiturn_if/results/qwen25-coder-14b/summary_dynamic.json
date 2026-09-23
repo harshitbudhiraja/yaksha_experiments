@@ -1,0 +1,197 @@
+{
+  "n_dialogues": 70,
+  "mode": "dynamic",
+  "IA": 0.3314121037463977,
+  "IA_first_attempt": 0.4369369369369369,
+  "CA": 0.5298270893371758,
+  "IFR": 0.01930835734870317,
+  "CIF": 5.385714285714286,
+  "CIF_excl_base": 4.614285714285714,
+  "CIF_issued": 1.6428571428571428,
+  "mean_instructions_issued": 3.1714285714285713,
+  "final_CA": 0.5923809523809523,
+  "base_retained_rate": 0.7714285714285715,
+  "mean_turns": 4.957142857142857,
+  "unprompted_pass_rate": 0.6111111111111112,
+  "by_instruction_type": {
+    "Annotation Coverage": {
+      "n": 51,
+      "IA_first_attempt": 0.4117647058823529,
+      "IA_after_feedback": 0.13333333333333333,
+      "n_retries": 30,
+      "forget_rate_once_satisfied": 0.09523809523809523
+    },
+    "Base": {
+      "n": 70,
+      "IA_first_attempt": 0.5714285714285714,
+      "IA_after_feedback": 0.36666666666666664,
+      "n_retries": 30,
+      "forget_rate_once_satisfied": 0.045454545454545456
+    },
+    "Code Complexity": {
+      "n": 3,
+      "IA_first_attempt": 0.0,
+      "IA_after_feedback": 0.0,
+      "n_retries": 3,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Code Standard": {
+      "n": 41,
+      "IA_first_attempt": 0.0,
+      "IA_after_feedback": 0.0,
+      "n_retries": 41,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Edge Case Handling": {
+      "n": 12,
+      "IA_first_attempt": 0.25,
+      "IA_after_feedback": 0.3333333333333333,
+      "n_retries": 9,
+      "forget_rate_once_satisfied": 0.2
+    },
+    "Exception Handling": {
+      "n": 28,
+      "IA_first_attempt": 0.8928571428571429,
+      "IA_after_feedback": 0.0,
+      "n_retries": 3,
+      "forget_rate_once_satisfied": 0.0
+    },
+    "Input-Output Conditions": {
+      "n": 17,
+      "IA_first_attempt": 0.47058823529411764,
+      "IA_after_feedback": 0.0,
+      "n_retries": 9,
+      "forget_rate_once_satisfied": 0.16666666666666666
+    }
+  },
+  "by_turn": {
+    "1": {
+      "n": 70,
+      "IA": 0.5714285714285714,
+      "CA": 0.5714285714285714,
+      "IFR": 0.0,
+      "upstream_ife": 0.5714285714285714
+    },
+    "2": {
+      "n": 55,
+      "IA": 0.45454545454545453,
+      "CA": 0.5545454545454546,
+      "IFR": 0.0,
+      "upstream_ife": 0.2772727272727273
+    },
+    "3": {
+      "n": 53,
+      "IA": 0.4528301886792453,
+      "CA": 0.6226415094339622,
+      "IFR": 0.0,
+      "upstream_ife": 0.20754716981132074
+    },
+    "4": {
+      "n": 50,
+      "IA": 0.26,
+      "CA": 0.5566666666666666,
+      "IFR": 0.02,
+      "upstream_ife": 0.13916666666666666
+    },
+    "5": {
+      "n": 43,
+      "IA": 0.16279069767441862,
+      "CA": 0.5038759689922481,
+      "IFR": 0.03875968992248062,
+      "upstream_ife": 0.10077519379844961
+    },
+    "6": {
+      "n": 32,
+      "IA": 0.15625,
+      "CA": 0.46979166666666666,
+      "IFR": 0.026041666666666664,
+      "upstream_ife": 0.07829861111111111
+    },
+    "7": {
+      "n": 19,
+      "IA": 0.05263157894736842,
+      "CA": 0.42105263157894735,
+      "IFR": 0.06578947368421052,
+      "upstream_ife": 0.06015037593984962
+    },
+    "8": {
+      "n": 10,
+      "IA": 0.0,
+      "CA": 0.42833333333333334,
+      "IFR": 0.08499999999999999,
+      "upstream_ife": 0.05354166666666667
+    },
+    "9": {
+      "n": 6,
+      "IA": 0.0,
+      "CA": 0.3222222222222222,
+      "IFR": 0.14166666666666666,
+      "upstream_ife": 0.03580246913580247
+    },
+    "10": {
+      "n": 5,
+      "IA": 0.0,
+      "CA": 0.32,
+      "IFR": 0.05,
+      "upstream_ife": 0.032
+    },
+    "11": {
+      "n": 1,
+      "IA": 0.0,
+      "CA": 0.0,
+      "IFR": 0.0,
+      "upstream_ife": 0.0
+    },
+    "12": {
+      "n": 1,
+      "IA": 0.0,
+      "CA": 0.0,
+      "IFR": 0.0,
+      "upstream_ife": 0.0
+    },
+    "13": {
+      "n": 1,
+      "IA": 0.0,
+      "CA": 0.0,
+      "IFR": 0.0,
+      "upstream_ife": 0.0
+    },
+    "14": {
+      "n": 1,
+      "IA": 0.0,
+      "CA": 0.0,
+      "IFR": 0.0,
+      "upstream_ife": 0.0
+    }
+  },
+  "forgetting_by_age": {
+    "1": {
+      "n": 102,
+      "forget_rate": 0.0392156862745098
+    },
+    "2": {
+      "n": 100,
+      "forget_rate": 0.07
+    },
+    "3": {
+      "n": 69,
+      "forget_rate": 0.07246376811594203
+    },
+    "4": {
+      "n": 50,
+      "forget_rate": 0.06
+    },
+    "5": {
+      "n": 26,
+      "forget_rate": 0.07692307692307693
+    },
+    "6": {
+      "n": 14,
+      "forget_rate": 0.07142857142857142
+    },
+    "7": {
+      "n": 6,
+      "forget_rate": 0.16666666666666666
+    }
+  }
+}

@@ -1,0 +1,74 @@
+#!/bin/bash
+#PBS -N codeif_local
+#PBS -P sbtabular.spons
+#PBS -q standard
+#PBS -l select=1:ncpus=8:ngpus=1
+#PBS -l walltime=01:30:00
+#PBS -j oe
+#
+# CodeIF for a candidate that OpenRouter does not host (Qwen2.5-Coder-14B).
+# Generation runs against a local vLLM endpoint; the CodeIF judge
+# (gpt-4o-2024-11-20) still runs through OpenRouter, which compute nodes can
+# reach once proxy.sh has authenticated this node's IP.
+
+set -uo pipefail
+
+source $HOME/miniconda3/etc/profile.d/conda.sh
+conda activate mbppeval
+export VLLM_USE_FLASHINFER_SAMPLER=0
+export TOKENIZERS_PARALLELISM=false
+
+EXP=$HOME/yaksha_experiments/experiments/codeif
+OUT=${EXP}/results
+mkdir -p "${OUT}"
+exec > "${OUT}/local_job.log" 2>&1
+
+MODEL=Qwen/Qwen2.5-Coder-14B-Instruct
+PORT=$((8900 + RANDOM % 80))
+URL="http://127.0.0.1:${PORT}/v1"
+
+echo "########## codeif local: ${MODEL} on $(hostname) $(date) ##########"
+
+# --- authenticate the campus proxy from THIS node (needed for the judge) ----
+# proxy.sh authorizes by client IP and then loops refreshing the session, so it
+# must run in the background; without it OpenRouter is unreachable here.
+nohup bash $HOME/proxy.sh > /tmp/proxy_codeif_$$.log 2>&1 &
+PROXY_PID=$!
+for i in $(seq 1 20); do
+  grep -q "proxy login" /tmp/proxy_codeif_$$.log 2>/dev/null && { echo "proxy authenticated"; break; }
+  sleep 3
+done
+export http_proxy=http://proxy21.iitd.ac.in:3128 https_proxy=http://proxy21.iitd.ac.in:3128
+curl -s --max-time 30 -o /dev/null -w "openrouter reachable: http=%{http_code}\n" \
+  https://openrouter.ai/api/v1/models
+
+# --- serve the candidate locally -------------------------------------------
+# HF_HUB_OFFLINE is deliberately NOT set: the proxy is up, and the weights are
+# already cached, so this neither downloads nor blocks.
+CUDA_VISIBLE_DEVICES=0 vllm serve "${MODEL}" \
+  --served-model-name "${MODEL}" --port "${PORT}" \
+  --tensor-parallel-size 1 --max-model-len 16384 \
+  --gpu-memory-utilization 0.90 --seed 42 \
+  > "${OUT}/vllm_local.log" 2>&1 &
+VPID=$!
+trap 'kill ${VPID} ${PROXY_PID} 2>/dev/null' EXIT
+
+for i in $(seq 1 120); do
+  curl -s --max-time 5 "${URL}/models" | grep -q "Qwen2.5-Coder-14B" && { echo "vllm up"; break; }
+  kill -0 ${VPID} 2>/dev/null || { echo "FATAL: vllm died"; tail -40 "${OUT}/vllm_local.log"; exit 1; }
+  sleep 10
+done
+# A models listing does not prove the model can generate -- probe for real.
+curl -s --max-time 120 "${URL}/chat/completions" -H 'Content-Type: application/json' \
+  -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say: ready\"}],\"max_tokens\":64}" \
+  | grep -q '"choices"' || { echo "FATAL: local model cannot generate"; tail -40 "${OUT}/vllm_local.log"; exit 1; }
+echo "local generation probe OK"
+
+for split in hard easy; do
+  echo "=== test_v2_${split}_50 : $(date) ==="
+  PARALLEL=16 bash "${EXP}/run_codeif.sh" \
+    "data/question/test_v2_${split}_50.jsonl" "${split}50" \
+    "${MODEL}@${URL}"
+done
+
+echo "########## DONE $(date) ##########"

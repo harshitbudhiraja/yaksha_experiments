@@ -1,0 +1,21 @@
+#!/bin/bash
+#PBS -N net_probe
+#PBS -P sbtabular.spons
+#PBS -q standard
+#PBS -l select=1:ncpus=1:ngpus=1
+#PBS -l walltime=00:05:00
+#PBS -j oe
+OUT=$HOME/yaksha_experiments/experiments/proficiency_diagnosis/results/net_probe.log
+exec > "$OUT" 2>&1
+echo "=== compute node network probe: $(hostname) $(date) ==="
+echo "--- DNS ---"
+getent hosts openrouter.ai || echo "DNS FAIL: openrouter.ai"
+getent hosts proxy21.iitd.ac.in || echo "DNS FAIL: proxy21"
+echo "--- direct HTTPS (expect fail) ---"
+curl -s --max-time 15 -o /dev/null -w "direct http=%{http_code}\n" https://openrouter.ai/api/v1/models || echo "direct: FAILED"
+echo "--- via proxy21:3128 ---"
+curl -s --max-time 25 -x http://proxy21.iitd.ac.in:3128 -o /dev/null \
+  -w "proxied http=%{http_code}\n" https://openrouter.ai/api/v1/models || echo "proxied: FAILED"
+echo "--- is proxy port even open? ---"
+(cat < /dev/null > /dev/tcp/proxy21.iitd.ac.in/3128) 2>/dev/null && echo "proxy TCP OPEN" || echo "proxy TCP BLOCKED"
+echo "=== done $(date) ==="

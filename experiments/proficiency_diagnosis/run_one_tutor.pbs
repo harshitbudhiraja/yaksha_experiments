@@ -1,0 +1,124 @@
+#!/bin/bash
+#PBS -N profdiag_1k
+#PBS -P sbtabular.spons
+#PBS -q standard
+#PBS -l select=1:ncpus=16:ngpus=2
+#PBS -l walltime=03:00:00
+#PBS -j oe
+#
+# ONE tutor vs the fixed gpt-oss-20b student, at full scale.
+#
+# One tutor per job (rather than cycling several in one job) so the five runs
+# queue independently and execute in PARALLEL as GPUs free up. Serialising them
+# would need ~6.5h of walltime, which schedules far worse than 5x3h.
+#
+# Required:  -v TUTOR_ID=<hf id>,TUTOR_SHORT=<name>
+# Optional:  MAXLEN (default 16384), EFFORT (gpt-oss only), N_PROFILES,
+#            PROBLEMS, TURNS, SEED, HOLD_AFTER
+#
+# Example:
+#   qsub -v TUTOR_ID=meta-llama/Llama-3.1-8B-Instruct,TUTOR_SHORT=llama31-8b \
+#        run_one_tutor.pbs
+
+set -uo pipefail
+
+source $HOME/miniconda3/etc/profile.d/conda.sh
+conda activate mbppeval
+
+export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1
+export VLLM_USE_FLASHINFER_SAMPLER=0
+export TOKENIZERS_PARALLELISM=false
+export TIKTOKEN_RS_CACHE_DIR=$HOME/harmony_cache
+
+: "${TUTOR_ID:?must pass -v TUTOR_ID=<hf id>}"
+: "${TUTOR_SHORT:?must pass -v TUTOR_SHORT=<short name>}"
+MAXLEN="${MAXLEN:-16384}"
+EFFORT="${EFFORT:-}"
+N_PROFILES="${N_PROFILES:-1000}"
+PROBLEMS="${PROBLEMS:-1}"
+TURNS="${TURNS:-8}"
+SEED="${SEED:-0}"
+CONDITIONS="interactive one_shot blind"
+
+EXP=$HOME/yaksha_experiments/experiments/proficiency_diagnosis
+OUT=${EXP}/results/scale1k/${TUTOR_SHORT}
+mkdir -p "${OUT}"
+exec > "${OUT}/job.log" 2>&1
+
+STUDENT_MODEL=openai/gpt-oss-20b
+SPORT=$((8600 + RANDOM % 100))
+TPORT=$((8800 + RANDOM % 100))
+SURL="http://127.0.0.1:${SPORT}/v1"
+TURL="http://127.0.0.1:${TPORT}/v1"
+
+echo "########## ${TUTOR_SHORT} vs gpt-oss-20b student on $(hostname) : $(date) ##########"
+echo "profiles=${N_PROFILES} problems=${PROBLEMS} turns=${TURNS} seed=${SEED}"
+nvidia-smi --query-gpu=index,name,memory.total --format=csv || true
+
+wait_for_server () {  # url served_name pid label
+  for i in $(seq 1 180); do
+    curl -s --max-time 5 "$1/models" | grep -q "$2" && { echo "  [$4] server up"; return 0; }
+    kill -0 "$3" 2>/dev/null || { echo "  [$4] FATAL: server died"; return 1; }
+    sleep 10
+  done
+  echo "  [$4] FATAL: server never ready"; return 1
+}
+
+probe_generation () {  # url served_name label
+  # /v1/models answering does not prove the model can generate a token.
+  local r
+  r=$(curl -s --max-time 180 "$1/chat/completions" -H 'Content-Type: application/json' \
+      -d "{\"model\":\"$2\",\"messages\":[{\"role\":\"user\",\"content\":\"Say: ready\"}],\"max_tokens\":2048}")
+  echo "$r" | grep -q '"choices"' && { echo "  [$3] generation probe OK"; return 0; }
+  echo "  [$3] FATAL: probe failed: ${r:0:300}"; return 1
+}
+
+echo "=== student on GPU 0 : $(date) ==="
+CUDA_VISIBLE_DEVICES=0 vllm serve "${STUDENT_MODEL}" \
+  --served-model-name student --port "${SPORT}" \
+  --tensor-parallel-size 1 --max-model-len 16384 \
+  --gpu-memory-utilization 0.90 --seed 42 \
+  > "${OUT}/vllm_student.log" 2>&1 &
+SPID=$!
+trap 'echo cleanup; kill ${SPID} ${TPID:-} 2>/dev/null' EXIT
+
+echo "=== tutor ${TUTOR_ID} on GPU 1 (max_model_len=${MAXLEN}) : $(date) ==="
+CUDA_VISIBLE_DEVICES=1 vllm serve "${TUTOR_ID}" \
+  --served-model-name tutor --port "${TPORT}" \
+  --tensor-parallel-size 1 --max-model-len "${MAXLEN}" \
+  --gpu-memory-utilization 0.92 --seed 42 \
+  > "${OUT}/vllm_tutor.log" 2>&1 &
+TPID=$!
+
+# Both load concurrently -- they are on separate GPUs, so serialising the waits
+# would just add the smaller model's load time to the critical path.
+wait_for_server "${SURL}" student ${SPID} student || exit 1
+wait_for_server "${TURL}" tutor   ${TPID} "${TUTOR_SHORT}" || { tail -40 "${OUT}/vllm_tutor.log"; exit 1; }
+probe_generation "${SURL}" student student || exit 1
+probe_generation "${TURL}" tutor "${TUTOR_SHORT}" || { tail -40 "${OUT}/vllm_tutor.log"; exit 1; }
+
+EFFORT_ARG=()
+[ -n "${EFFORT}" ] && EFFORT_ARG=(--tutor-reasoning-effort "${EFFORT}")
+
+cd "${EXP}"
+echo "=== ROLLOUTS $(date) ==="
+python -u run_rollouts.py \
+  --tutor-model tutor     --tutor-base-url   "${TURL}" \
+  --student-model student --student-base-url "${SURL}" \
+  --student-reasoning-effort low "${EFFORT_ARG[@]}" \
+  --max-tokens 4096 --difficulty Easy \
+  --n-profiles ${N_PROFILES} --problems ${PROBLEMS} --turns ${TURNS} \
+  --profile-seed ${SEED} --concurrency 16 \
+  --conditions ${CONDITIONS} \
+  --output "${OUT}/rollouts.jsonl"
+
+echo "=== EVALUATE $(date) ==="
+python -u evaluate.py --rollouts "${OUT}/rollouts.jsonl" \
+  --output "${OUT}/episode_scores.jsonl" --summary "${OUT}/summary.json"
+
+echo "########## DONE ${TUTOR_SHORT} $(date) ##########"
+
+if [ "${HOLD_AFTER:-0}" = "1" ]; then
+  echo "=== HOLDING. release with: touch ${OUT}/RELEASE"
+  rm -f "${OUT}/RELEASE"; while [ ! -f "${OUT}/RELEASE" ]; do sleep 60; done
+fi

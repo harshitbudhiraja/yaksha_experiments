@@ -1,0 +1,158 @@
+#!/bin/bash
+#PBS -N profdiag_cross
+#PBS -P sbtabular.spons
+#PBS -q standard
+#PBS -l select=1:ncpus=16:ngpus=2
+#PBS -l walltime=03:00:00
+#PBS -j oe
+#
+# Cross-model proficiency diagnosis: one fixed simulated student
+# (gpt-oss-20b) interviewed by several different tutor models in turn.
+#
+# The student is served ONCE on GPU 0 and stays up for the whole job, so every
+# tutor faces an identical student population (same --profile-seed, same
+# problems). Tutors are cycled one at a time on GPUs 1-3.
+#
+# Submit into a reservation:
+#   qsub -q R78014 run_cross_model.pbs
+# Optionally hold the allocation afterwards:
+#   qsub -q R78014 -v HOLD_AFTER=1 run_cross_model.pbs
+
+set -uo pipefail
+
+source $HOME/miniconda3/etc/profile.d/conda.sh
+conda activate mbppeval
+
+export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1
+export VLLM_USE_FLASHINFER_SAMPLER=0
+export TOKENIZERS_PARALLELISM=false
+export TIKTOKEN_RS_CACHE_DIR=$HOME/harmony_cache
+
+EXP=$HOME/yaksha_experiments/experiments/proficiency_diagnosis
+OUT=${EXP}/results/cross_model
+mkdir -p "${OUT}"
+exec > "${OUT}/job.log" 2>&1
+
+# Experiment size -- keep identical across tutors or the comparison is void.
+N_PROFILES=100
+PROBLEMS=2
+TURNS=8
+SEED=0
+CONDITIONS="interactive one_shot blind"
+
+STUDENT_MODEL=openai/gpt-oss-20b
+STUDENT_PORT=8600
+
+# tutor spec: <hf_id>|<short_name>|<max_model_len>|<reasoning_effort or ->
+# All tutors run tensor-parallel-1 on GPU 1 (the student owns GPU 0). The two
+# ~31B models get a shorter context so their weights plus KV cache fit in one
+# 80GB card; 12288 still leaves ~8k of prompt room after the 4096 answer budget.
+# Ordered smallest-first so a walltime overrun costs the most expensive run,
+# not all of them.
+TUTORS=(
+  "meta-llama/Llama-3.1-8B-Instruct|llama31-8b|16384|-"
+  "Qwen/Qwen2.5-Coder-14B-Instruct|qwen25-coder-14b|16384|-"
+  "openai/gpt-oss-20b|gptoss-20b|16384|low"
+  "google/gemma-4-31B-it|gemma4-31b|12288|-"
+  "Qwen/Qwen3-Coder-30B-A3B-Instruct|qwen3-coder-30b|12288|-"
+)
+
+echo "########## cross-model profdiag on $(hostname) : $(date) ##########"
+nvidia-smi --query-gpu=index,name,memory.total --format=csv || true
+
+wait_for_server () {  # $1=base_url  $2=served_name  $3=pid  $4=label
+  for i in $(seq 1 150); do
+    if curl -s --max-time 5 "$1/models" | grep -q "$2"; then echo "  [$4] server up"; return 0; fi
+    if ! kill -0 "$3" 2>/dev/null; then echo "  [$4] FATAL: server process died"; return 1; fi
+    sleep 10
+  done
+  echo "  [$4] FATAL: server never became ready"; return 1
+}
+
+probe_generation () {  # $1=base_url  $2=served_name  $3=label
+  # /v1/models answering does not mean the model can generate -- always send a
+  # real completion before committing to a run (see README).
+  local r
+  r=$(curl -s --max-time 180 "$1/chat/completions" -H 'Content-Type: application/json' \
+      -d "{\"model\":\"$2\",\"messages\":[{\"role\":\"user\",\"content\":\"Say: ready\"}],\"max_tokens\":2048}")
+  if echo "$r" | grep -q '"choices"'; then echo "  [$3] generation probe OK"; return 0; fi
+  echo "  [$3] FATAL: generation probe failed: ${r:0:300}"; return 1
+}
+
+# --- student: served once, on GPU 0, for the whole job ----------------------
+echo "=== starting STUDENT ${STUDENT_MODEL} on GPU 0 : $(date) ==="
+CUDA_VISIBLE_DEVICES=0 vllm serve "${STUDENT_MODEL}" \
+  --served-model-name student --port "${STUDENT_PORT}" \
+  --tensor-parallel-size 1 --max-model-len 16384 \
+  --gpu-memory-utilization 0.90 --seed 42 \
+  > "${OUT}/vllm_student.log" 2>&1 &
+STUDENT_PID=$!
+trap 'echo "cleanup: killing servers"; kill ${STUDENT_PID} ${TUTOR_PID:-} 2>/dev/null' EXIT
+
+STUDENT_URL="http://127.0.0.1:${STUDENT_PORT}/v1"
+wait_for_server "${STUDENT_URL}" student ${STUDENT_PID} student || exit 1
+probe_generation "${STUDENT_URL}" student student || exit 1
+
+# --- cycle tutors -----------------------------------------------------------
+TUTOR_PORT=8700
+for spec in "${TUTORS[@]}"; do
+  IFS='|' read -r HF_ID SHORT MAXLEN EFFORT <<< "${spec}"
+  TUTOR_PORT=$((TUTOR_PORT + 1))
+  TUTOR_URL="http://127.0.0.1:${TUTOR_PORT}/v1"
+  RUN_OUT="${OUT}/${SHORT}"
+  mkdir -p "${RUN_OUT}"
+
+  echo
+  echo "=== TUTOR ${SHORT} (${HF_ID}, max_model_len=${MAXLEN}) : $(date) ==="
+
+  CUDA_VISIBLE_DEVICES=1 vllm serve "${HF_ID}" \
+    --served-model-name tutor --port "${TUTOR_PORT}" \
+    --tensor-parallel-size 1 --max-model-len "${MAXLEN}" \
+    --gpu-memory-utilization 0.92 --seed 42 \
+    > "${RUN_OUT}/vllm_tutor.log" 2>&1 &
+  TUTOR_PID=$!
+
+  if ! wait_for_server "${TUTOR_URL}" tutor ${TUTOR_PID} "${SHORT}"; then
+    echo "  [${SHORT}] SKIPPING (server failed to start)"; tail -30 "${RUN_OUT}/vllm_tutor.log"
+    kill ${TUTOR_PID} 2>/dev/null; continue
+  fi
+  if ! probe_generation "${TUTOR_URL}" tutor "${SHORT}"; then
+    echo "  [${SHORT}] SKIPPING (cannot generate)"; tail -30 "${RUN_OUT}/vllm_tutor.log"
+    kill ${TUTOR_PID} 2>/dev/null; continue
+  fi
+
+  EFFORT_ARG=()
+  [ "${EFFORT}" != "-" ] && EFFORT_ARG=(--tutor-reasoning-effort "${EFFORT}")
+
+  cd "${EXP}"
+  python -u run_rollouts.py \
+    --tutor-model tutor     --tutor-base-url   "${TUTOR_URL}" \
+    --student-model student --student-base-url "${STUDENT_URL}" \
+    --student-reasoning-effort low "${EFFORT_ARG[@]}" \
+    --max-tokens 4096 --difficulty Easy \
+    --n-profiles ${N_PROFILES} --problems ${PROBLEMS} --turns ${TURNS} \
+    --profile-seed ${SEED} --concurrency 16 \
+    --conditions ${CONDITIONS} \
+    --output "${RUN_OUT}/rollouts.jsonl"
+
+  python -u evaluate.py --rollouts "${RUN_OUT}/rollouts.jsonl" \
+    --output "${RUN_OUT}/episode_scores.jsonl" --summary "${RUN_OUT}/summary.json"
+
+  echo "  [${SHORT}] done at $(date), shutting tutor down"
+  kill ${TUTOR_PID} 2>/dev/null; wait ${TUTOR_PID} 2>/dev/null
+  unset TUTOR_PID
+  sleep 10   # let the GPU drain before the next model loads
+done
+
+echo
+echo "########## ALL TUTORS DONE $(date) ##########"
+grep -l . "${OUT}"/*/summary.json 2>/dev/null | sed 's|^|  summary: |'
+
+if [ "${HOLD_AFTER:-0}" = "1" ]; then
+  NODE_IP=$(hostname -I | awk '{print $1}')
+  echo "=== HOLDING allocation. student still at http://${NODE_IP}:${STUDENT_PORT}/v1"
+  echo "=== release early with: touch ${OUT}/RELEASE"
+  rm -f "${OUT}/RELEASE"
+  while [ ! -f "${OUT}/RELEASE" ]; do sleep 60; done
+  echo "=== hold released at $(date)"
+fi

@@ -1,0 +1,94 @@
+#!/bin/bash
+#PBS -N codeif_one
+#PBS -P sbtabular.spons
+#PBS -q standard
+#PBS -l select=1:ncpus=8:ngpus=1
+#PBS -l walltime=03:00:00
+#PBS -j oe
+#
+# CodeIF for ONE candidate, generated LOCALLY.
+#
+# Generation must be local: OpenRouter load-balances the same model id across
+# providers serving fp4/fp8/bf16, so an API run measures a mixture of quantized
+# deployments rather than the model. Serving it here fixes precision and
+# decoding params, and makes the run reproducible.
+#
+# The CodeIF judge still goes through OpenRouter (the benchmark has no
+# executable ground truth -- compliance is labelled by an LLM judge). Compute
+# nodes reach it once proxy.sh has authenticated this node's IP.
+#
+# Required: -v MODEL=<hf id>
+# Optional: MAXLEN (16384), QFILE, VERSION, JUDGE
+#
+#   qsub -v MODEL=meta-llama/Llama-3.1-8B-Instruct run_codeif_one.pbs
+
+set -uo pipefail
+
+source $HOME/miniconda3/etc/profile.d/conda.sh
+conda activate mbppeval
+export VLLM_USE_FLASHINFER_SAMPLER=0
+export TOKENIZERS_PARALLELISM=false
+export TIKTOKEN_RS_CACHE_DIR=$HOME/harmony_cache   # gpt-oss harmony vocab
+# Weights are already cached. With the proxy up but offline mode OFF, vLLM
+# reaches the Hub for tokenizer files and Llama-3.1 returns 403 (gated repo),
+# killing the job despite the local copy being complete. Force cache-only.
+export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1
+
+: "${MODEL:?must pass -v MODEL=<hf id>}"
+MAXLEN="${MAXLEN:-16384}"
+QFILE="${QFILE:-data/question/final_release_1200.jsonl}"
+VERSION="${VERSION:-full1200_local}"
+JUDGE="${JUDGE:-deepseek/deepseek-v4-flash}"
+
+EXP=$HOME/yaksha_experiments/experiments/codeif
+SAFE=$(echo "${MODEL}" | tr '/' '_')
+OUT=${EXP}/results/${SAFE}
+mkdir -p "${OUT}"
+exec > "${OUT}/job.log" 2>&1
+
+PORT=$((8900 + RANDOM % 80))
+URL="http://127.0.0.1:${PORT}/v1"
+
+echo "########## CodeIF local: ${MODEL} on $(hostname) $(date) ##########"
+echo "questions=${QFILE}  version=${VERSION}  judge=${JUDGE}  max_model_len=${MAXLEN}"
+nvidia-smi --query-gpu=name,memory.total --format=csv || true
+
+# --- proxy: needed only so the judge can reach OpenRouter --------------------
+nohup bash $HOME/proxy.sh > /tmp/proxy_codeif_$$.log 2>&1 &
+PROXY_PID=$!
+for i in $(seq 1 20); do
+  grep -q "proxy login" /tmp/proxy_codeif_$$.log 2>/dev/null && { echo "proxy authenticated"; break; }
+  sleep 3
+done
+export http_proxy=http://proxy21.iitd.ac.in:3128 https_proxy=http://proxy21.iitd.ac.in:3128
+# Localhost MUST bypass the proxy. Without this the readiness poll below is
+# routed to proxy21, never sees the local server, and the job burns its whole
+# startup budget before failing -- which is exactly what killed the first
+# attempt (4 jobs, ~26 min each).
+export no_proxy="127.0.0.1,localhost" NO_PROXY="127.0.0.1,localhost"
+curl -s --max-time 30 -o /dev/null -w "openrouter: http=%{http_code}\n" https://openrouter.ai/api/v1/models
+
+# --- serve the candidate at native precision --------------------------------
+CUDA_VISIBLE_DEVICES=0 vllm serve "${MODEL}" \
+  --served-model-name "${MODEL}" --port "${PORT}" \
+  --tensor-parallel-size 1 --max-model-len "${MAXLEN}" \
+  --gpu-memory-utilization 0.92 --seed 42 \
+  > "${OUT}/vllm.log" 2>&1 &
+VPID=$!
+trap 'kill ${VPID} ${PROXY_PID} 2>/dev/null' EXIT
+
+for i in $(seq 1 150); do
+  curl -s --max-time 5 --noproxy "*" "${URL}/models" | grep -q "${MODEL}" && { echo "vllm up"; break; }
+  kill -0 ${VPID} 2>/dev/null || { echo "FATAL: vllm died"; tail -40 "${OUT}/vllm.log"; exit 1; }
+  sleep 10
+done
+# A models listing does not prove the model can generate a token.
+curl -s --max-time 180 --noproxy "*" "${URL}/chat/completions" -H 'Content-Type: application/json' \
+  -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say: ready\"}],\"max_tokens\":2048}" \
+  | grep -q '"choices"' || { echo "FATAL: cannot generate"; tail -40 "${OUT}/vllm.log"; exit 1; }
+echo "generation probe OK"
+
+echo "=== CodeIF pipeline $(date) ==="
+PARALLEL=16 bash "${EXP}/run_codeif.sh" "${QFILE}" "${VERSION}" "${MODEL}@${URL}" "${JUDGE}"
+
+echo "########## DONE ${MODEL} $(date) ##########"

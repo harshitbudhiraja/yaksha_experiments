@@ -1,0 +1,301 @@
+% ---------------------------------------------------------------------------
+% Appendix: Multi-turn code instruction following (CodeIF-Bench)
+%
+% Preamble requirements (add to your main .tex if not already present):
+%   \usepackage{booktabs}
+%   \usepackage{amsmath}
+%   \usepackage{multirow}
+%
+% Metric macros used throughout this section -- add to your preamble, or keep
+% the block below if this file is \input{} before any other use of them:
+%   \newcommand{\IA}{\mathrm{IA}}
+%   \newcommand{\CA}{\mathrm{CA}}
+%   \newcommand{\IFR}{\mathrm{IFR}}
+%   \newcommand{\CIF}{\mathrm{CIF}}
+%
+% BibTeX entry for the citation used below:
+%
+% @misc{wang2025codeif,
+%   title        = {CodeIF-Bench: Evaluating Instruction-Following Capabilities
+%                   of Large Language Models in Interactive Code Generation},
+%   author       = {Peiding Wang and Li Zhang and Fang Liu and Lin Shi and
+%                   Minxiao Li and Bo Shen and An Fu},
+%   year         = {2025},
+%   eprint       = {2503.22688},
+%   archivePrefix= {arXiv},
+%   primaryClass = {cs.SE},
+%   url          = {https://arxiv.org/abs/2503.22688}
+% }
+% ---------------------------------------------------------------------------
+
+\providecommand{\IA}{\mathrm{IA}}
+\providecommand{\CA}{\mathrm{CA}}
+\providecommand{\IFR}{\mathrm{IFR}}
+\providecommand{\CIF}{\mathrm{CIF}}
+
+\section{Multi-Turn Code Instruction Following}
+\label{app:multiturn-if}
+
+\subsection{Motivation}
+
+Single-turn instruction-following benchmarks measure whether a model complies
+with an instruction issued in isolation. They cannot detect the failure mode
+that matters for an interactive tutor: satisfying the instruction at turn $t$
+by silently undoing the instruction satisfied at turn $t-2$. We therefore
+evaluate our candidate models on \textbf{CodeIF-Bench}~\cite{wang2025codeif},
+in which every instruction is paired with executable unit tests, so that
+instruction compliance is decided by running code rather than by an LLM judge.
+
+\subsection{Benchmark and Task Format}
+
+We use the function-level split of CodeIF-Bench, which is derived from MBPP.
+Each task consists of a short natural-language specification (median 101
+characters), a set of base assertions, and seven independently verifiable
+requirements: \emph{Input--Output Conditions}, \emph{Exception Handling},
+\emph{Edge Case Handling}, \emph{Functionality Extension}, \emph{Annotation
+Coverage}, \emph{Code Complexity}, and \emph{Code Standard} (PEP~8). Each
+requirement carries its own unit tests, which are executed against the current
+candidate function.
+
+We exclude \emph{Functionality Extension} from all reported runs. At function
+level it deliberately alters the signature (e.g.\ ``add an \texttt{all=True}
+parameter''), which invalidates the base assertions against which every other
+metric is measured. The reference implementation's dynamic-conversation script
+excludes it for the same reason; its static script does not, which is one
+source of disagreement between the two.
+
+\paragraph{A caveat on split size.}
+The benchmark distributes the function-level split as two files,
+\texttt{L\_1\_part\_1.jsonl} (50 tasks) and \texttt{L\_1\_part\_2.jsonl} (20
+tasks). Despite the shared \texttt{L\_1} prefix, the second file carries the
+\emph{repository-level} schema (\texttt{namespace}, \texttt{project\_path},
+\texttt{completion\_path}; its \texttt{tests} field holds \texttt{pytest} node
+identifiers rather than runnable assertions). Executing a node-identifier
+string as Python yields a bare string literal, which is a valid no-op and exits
+successfully: every instruction on those 20 tasks therefore passes vacuously.
+We detect and reject these rows, and all results below are computed on the
+\textbf{50 genuinely function-level tasks}. We note this explicitly because the
+naming invites the error, and because including those rows inflates $\IA$,
+$\CA$, $\CIF$ and base retention while deflating $\IFR$.
+
+\subsection{Interaction Protocols}
+
+We evaluate two protocols, both multi-turn:
+
+\begin{description}
+  \item[Static.] The requirements are issued one per turn in the benchmark's
+    fixed order. No feedback is given and no retries are allowed. This isolates
+    instruction retention from error-driven repair.
+  \item[Dynamic.] At each round the first requirement that the current code
+    fails is issued alone. If the model does not satisfy it, one feedback turn
+    is given containing the failing check's error message; if it still fails,
+    that requirement is abandoned. This is the reference protocol and is closest
+    to a real interactive session.
+\end{description}
+
+A third protocol, in which all requirements are stated in a single prompt, is
+implemented as a no-conversation control but is not reported here; single-shot
+instruction following is covered separately in
+Appendix~\ref{app:instruction-following}.
+
+\subsection{Metrics}
+
+Let $S_t$ denote the set of instructions issued up to and including turn $t$
+(the base specification counts as one), let $i_t$ be the instruction that turn
+$t$ addresses, and let $P_t \subseteq S_{t-1}$ be those instructions the model
+had already satisfied at some earlier turn. Writing $\mathbb{1}[n \text{ at } t]$
+for the indicator that instruction $n$'s unit tests all pass against turn $t$'s
+code:
+
+\begin{align}
+  \IA_t  &= \mathbb{1}[i_t \text{ at } t] \\
+  \CA_t  &= \frac{1}{|S_t|}\sum_{n \in S_t} \mathbb{1}[n \text{ at } t] \\
+  \IFR_t &= \frac{1}{|P_t|}\bigl|\{\, n \in P_t : \neg\,\mathbb{1}[n \text{ at } t] \,\}\bigr| \\
+  \CIF   &= \bigl|\{\, n : \mathbb{1}[n \text{ at } T] \,\}\bigr|, \quad T = \text{final turn}
+\end{align}
+
+$\IA$ measures compliance with the current instruction; $\CA$ the fraction of
+the conversation still satisfied; $\IFR$ the proportion of already-satisfied
+instructions that a turn breaks; and $\CIF$ how many instructions survive to the
+end. $\CIF$ is computed over all of a task's instructions rather than only those
+issued, so that it is comparable across protocols: the dynamic protocol issues
+only instructions the current code fails, and an issued-only count would score
+it against a harder, self-selected subset.
+
+We additionally report three quantities not present in the reference
+implementation:
+
+\begin{itemize}
+  \item \textbf{Forgetting by age}: $\IFR$ stratified by $t - u$, where $u$ is
+    the turn at which the forgotten instruction was first satisfied. This is the
+    context-management curve; a rising curve indicates distance-driven
+    forgetting, a flat one indicates that loss depends on instruction type
+    rather than on conversational distance.
+  \item \textbf{Base retention}: whether the function still passes its original
+    MBPP assertions at the final turn. This is the most directly interpretable
+    measure of regression and requires no normalisation.
+  \item \textbf{Unprompted pass rate}: the proportion of instructions already
+    satisfied at turn 1, before being requested. Several requirement types are
+    satisfied by any reasonable solution, so $\CA$ and $\CIF$ must be read net
+    of this baseline.
+\end{itemize}
+
+\paragraph{Comparability.}
+$\IA$ should be compared only within a protocol. The dynamic protocol
+conditions on failure by construction, so its $\IA$ is measured on a harder
+subset than the static protocol's. Cross-protocol comparisons should use
+$\CIF$, final $\CA$, or $\IFR$.
+
+\subsection{Experimental Setup}
+
+Each model is served locally with vLLM behind an OpenAI-compatible endpoint
+(\texttt{tensor-parallel-size} 1, \texttt{max\_model\_len} 16384, temperature 0,
+\texttt{max\_tokens} 2048) on a single NVIDIA A100-80GB. For GPT-OSS-20B we set
+\texttt{reasoning\_effort=low}; its responses may place the answer in a
+reasoning channel and leave \texttt{content} null, which our client handles by
+falling back to \texttt{reasoning\_content}. Candidate code is executed in a
+throwaway working directory with a memory cap and a wall-clock timeout; each
+unit-test snippet is run as its own subprocess so that a single crash cannot
+condemn the remaining snippets of the same requirement.
+
+We reimplemented the harness rather than using the reference scripts, which
+hardcode hosted-API credentials and a fixed model name. Four differences affect
+the numbers and are stated for transparency: (i) test outcomes are attributed
+per snippet rather than per requirement; (ii) a turn producing no runnable code
+retains the previous turn's code, whereas the reference implementation treats
+raw prose as the candidate and thereby scores a non-answer as total forgetting;
+(iii) blank lines are preserved, whereas the reference strips them before
+testing, which is self-defeating for the PEP~8 requirement; and (iv) $\CIF$ is
+computed as defined above rather than as $\CA_t / t$, a quantity that decays
+mechanically with turn index. As a validation, two models were additionally
+evaluated with the reference harness on the same 50 tasks; agreement was close
+(Gemma-4-31B-it: static $\IA$ 0.773 vs.\ 0.770, $\IFR$ 0.037 vs.\ 0.044;
+Qwen2.5-Coder-14B: 0.624 vs.\ 0.655, $\IFR$ 0.037 vs.\ 0.058).
+
+\subsection{Results}
+
+\begin{table}[t]
+\centering
+\small
+\caption{Multi-turn instruction following on CodeIF-Bench (function level, 50
+tasks, \emph{Functionality Extension} excluded). Higher is better except
+$\IFR$. ``Base ret.'' is the fraction of dialogues whose final function still
+passes the original MBPP assertions; ``Unpr.'' is the unprompted pass rate.}
+\label{tab:mtif-main}
+\begin{tabular}{llcccccc}
+\toprule
+Model & Protocol & $\IA$ & $\CA$ & $\IFR$ & $\CIF$/7 & Base ret. & Unpr. \\
+\midrule
+\multirow{2}{*}{Llama-3.1-8B-Instruct}
+  & dynamic & 0.269 & 0.315 & 0.343 & 3.04 & 0.360 & 0.453 \\
+  & static  & 0.572 & 0.540 & 0.165 & 1.96 & 0.240 & 0.463 \\
+\multirow{2}{*}{Qwen2.5-Coder-14B-Instruct}
+  & dynamic & 0.318 & 0.536 & 0.022 & 5.02 & 0.760 & 0.480 \\
+  & static  & 0.624 & 0.684 & 0.037 & 4.40 & 0.660 & 0.473 \\
+\multirow{2}{*}{GPT-OSS-20B}
+  & dynamic & 0.569 & 0.686 & 0.048 & 6.20 & 0.820 & 0.567 \\
+  & static  & 0.753 & 0.773 & 0.038 & 5.30 & 0.740 & 0.577 \\
+\multirow{2}{*}{Qwen3-Coder-30B-A3B-Instruct}
+  & dynamic & 0.350 & 0.594 & 0.026 & 5.24 & 0.780 & 0.453 \\
+  & static  & 0.661 & 0.755 & 0.031 & 4.68 & 0.700 & 0.456 \\
+\multirow{2}{*}{Gemma-4-31B-it}
+  & dynamic & \textbf{0.623} & \textbf{0.706} & 0.033 & 6.18 & 0.800 & 0.493 \\
+  & static  & \textbf{0.773} & \textbf{0.781} & 0.037 & 5.44 & 0.700 & 0.493 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\caption{Forgetting by age under the dynamic protocol: $\IFR$ stratified by the
+number of turns since the instruction was first satisfied. Bucket sizes for
+Llama-3.1-8B are given below the table. The other models' dialogues end
+sooner, so their buckets shrink quickly (4--14 observations at ages 6--7);
+read those columns as indicative only.}
+\label{tab:mtif-age}
+\begin{tabular}{lccccccc}
+\toprule
+Model & 1 & 2 & 3 & 4 & 5 & 6 & 7 \\
+\midrule
+Llama-3.1-8B-Instruct        & 0.22 & 0.34 & 0.45 & 0.63 & 0.78 & 0.86 & 0.95 \\
+Qwen2.5-Coder-14B-Instruct   & 0.04 & 0.07 & 0.07 & 0.06 & 0.08 & 0.07 & 0.17 \\
+GPT-OSS-20B                  & 0.03 & 0.08 & 0.16 & 0.21 & 0.19 & 0.00 & 0.20 \\
+Qwen3-Coder-30B-A3B-Instruct & 0.03 & 0.03 & 0.06 & 0.07 & 0.09 & 0.21 & 0.75 \\
+Gemma-4-31B-it               & 0.02 & 0.06 & 0.09 & 0.11 & 0.09 & 0.11 & 0.25 \\
+\midrule
+\multicolumn{8}{l}{\footnotesize Llama-3.1-8B bucket sizes: 108, 100, 84, 71, 58, 50, 42} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\caption{First-attempt $\IA$ by requirement type under the static protocol.}
+\label{tab:mtif-type}
+\begin{tabular}{lccccccc}
+\toprule
+Model & Base & I/O & Exc. & Edge & Annot. & Cplx. & PEP~8 \\
+\midrule
+Llama-3.1-8B-Instruct        & 0.38 & 0.78 & 0.78 & 0.60 & 0.54 & 0.82 & 0.10 \\
+Qwen2.5-Coder-14B-Instruct   & 0.48 & 0.80 & 0.86 & 0.73 & 0.42 & 0.92 & 0.16 \\
+GPT-OSS-20B                  & 0.54 & 0.86 & 0.98 & 0.75 & 0.68 & 0.96 & 0.50 \\
+Qwen3-Coder-30B-A3B-Instruct & 0.54 & 0.90 & 1.00 & 0.77 & 0.42 & 0.96 & 0.04 \\
+Gemma-4-31B-it               & 0.54 & 0.84 & 0.98 & 0.81 & 0.84 & 0.94 & 0.46 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Discussion}
+
+\paragraph{Multi-turn retention is not predicted by single-turn ability.}
+% TODO: HumanEval 0.909 is not in this repo's results -- confirm against the
+% solving-ability table before submission.
+Gemma-4-31B-it and Qwen2.5-Coder-14B-Instruct obtain identical HumanEval
+pass@1 (0.909), yet differ by 15 points of static $\IA$ (0.773 vs.\ 0.624) and
+by about one instruction in $\CIF$ (5.44 vs.\ 4.40 static). GPT-OSS-20B ranks
+second on static $\IA$ and $\CA$ and first on dynamic $\CIF$ and base retention.
+Multi-turn instruction following is therefore a distinct axis and is not
+recoverable from single-turn coding scores.
+
+\paragraph{$\IFR$ exposes failures that $\IA$ conceals.}
+Llama-3.1-8B-Instruct attains a static $\IA$ of 0.572, only 5 points below
+Qwen2.5-Coder-14B-Instruct, so on per-turn compliance the two appear broadly
+comparable. Their $\IFR$ differs by a factor of $4.5$ (0.165 vs.\ 0.037) and
+their base retention by a factor of $2.8$ (0.240 vs.\ 0.660): in 76\% of
+dialogues Llama's final function no longer satisfies the specification it was
+originally given. It achieves per-turn compliance by destroying prior work, a
+pattern no single-turn metric can express.
+
+\paragraph{Only the weakest model forgets with distance.}
+$\IFR$ generally rises with instruction age (Table~\ref{tab:mtif-age}), but
+the effect differs in kind rather than degree across models. For
+Llama-3.1-8B it rises monotonically from 0.22 to 0.95, which points to
+distance-driven forgetting: older instructions are progressively lost. The
+other four stay at or below 0.21 through age~6. Qwen2.5-Coder-14B is nearly
+flat (0.04--0.08), and GPT-OSS-20B and Gemma-4-31B plateau after age~4, so
+for these models forgetting depends more on the instruction than on how long
+ago it was issued.
+
+\paragraph{Requirement types differ sharply in difficulty.}
+PEP~8 compliance is the hardest requirement for every model (0.04--0.50) and
+\emph{Annotation Coverage} the most discriminative (0.42--0.84), whereas
+\emph{Exception Handling} and \emph{Code Complexity} are near-saturated
+(0.78--1.00). The latter two are partly responsible for the high unprompted
+pass rates (0.45--0.58): several of their unit tests are satisfied vacuously,
+for instance a \texttt{try}/\texttt{except} block with no failure branch, which
+passes when no exception is raised. We report the unprompted pass rate so that
+$\CA$ and $\CIF$ can be read net of this baseline, and we leave the benchmark's
+tests unmodified for comparability.
+
+\subsection{Limitations}
+
+Results cover the function-level split only (50 tasks). The repository-level
+splits require the original project checkouts and a working per-project test
+environment, and verify requirements through \texttt{pytest} node identifiers
+rather than self-contained assertions; they are not evaluated here. Roughly
+half of all instructions pass before being requested, so $\CA$ and $\CIF$ should
+not be read as pure instruction-following rates. Finally, requirement types are
+software-engineering constraints rather than pedagogical ones; transferring this
+protocol to tutor-specific instructions is left to future work.

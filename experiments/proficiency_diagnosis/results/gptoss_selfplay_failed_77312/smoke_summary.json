@@ -1,0 +1,20 @@
+{
+  "tutor_model": "gptoss",
+  "student_model": "gptoss",
+  "n_episodes_scored": 0,
+  "n_episodes_dropped": 3,
+  "baselines": {
+    "constant_mae_by_level": {
+      "1": 2.3333333333333335,
+      "2": 1.5,
+      "3": 0.9444444444444445,
+      "4": 0.888888888888889,
+      "5": 1.6666666666666667
+    },
+    "best_constant_level": 4,
+    "best_constant_mae": 0.888888888888889,
+    "random_uniform_mae": 1.4666666666666668
+  },
+  "by_condition": {},
+  "by_archetype": {}
+}
